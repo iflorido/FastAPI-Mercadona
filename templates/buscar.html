@@ -1,0 +1,38 @@
+<style>
+    /* ... (los estilos que ya tenías) ... */
+    .search-container {
+        padding: 1em;
+        background-color: #f0f0f0;
+        border-bottom: 1px solid #ddd;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 1em;
+    }
+    .search-form {
+        display: flex;
+        max-width: 600px;
+        flex-grow: 1;
+    }
+    /* ... (el resto de tus estilos) ... */
+    .update-button {
+        padding: 0.8em 1.5em;
+        border: 1px solid #28a745;
+        background-color: #28a745;
+        color: white;
+        text-decoration: none;
+        border-radius: 4px;
+        white-space: nowrap;
+    }
+    .update-button:hover {
+        background-color: #218838;
+    }
+</style>
+
+<div class="search-container">
+    <form action="{{ url_for('search_products') }}" method="get" class="search-form">
+        <input type="search" name="query" placeholder="Buscar producto en la base de datos local..." required>
+        <button type="submit">Buscar</button>
+    </form>
+    <a href="{{ url_for('update_db_endpoint') }}" class="update-button">Actualizar Datos</a>
+</div>

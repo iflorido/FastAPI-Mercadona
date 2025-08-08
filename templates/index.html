@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Categorías de Mercadona</title>
+    <style>
+        body { font-family: sans-serif; margin: 2em; background-color: #f9f9f9; }
+        .category-block { 
+            background-color: white; 
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 1em 1.5em; 
+            margin-bottom: 1.5em; 
+        }
+        h1 { text-align: center; color: #333; }
+        h2 { color: #005432; border-bottom: 2px solid #9dcfbc; padding-bottom: 0.3em;}
+        ul { list-style-type: none; padding-left: 0.5em; }
+        li { margin: 0.5em 0; }
+        a { text-decoration: none; color: #007BFF; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    {% include 'buscar.html' %}
+    <h1>🛒 Todas las Categorías de Productos</h1>
+
+    {% for main_cat in main_categories %}
+        <div class="category-block">
+            <h2>{{ main_cat.name }}</h2>
+            
+            <ul>
+                {% for subcategory in main_cat.categories %}
+                <li>
+                    <a href="{{ url_for('read_category', category_id=subcategory.id) }}">
+                        {{ subcategory.name }}
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endfor %}
+
+</body>
+</html>

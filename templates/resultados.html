@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Resultados para "{{ query }}"</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; background-color: #f9f9f9; }
+        .container { max-width: 1200px; margin: 2em auto; padding: 0 2em; }
+        .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.5em; }
+        .product-card { background-color: white; border: 1px solid #ddd; border-radius: 8px; text-align: center; padding: 1em; transition: box-shadow 0.3s; }
+        .product-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .product-card img { max-width: 100%; height: 150px; object-fit: contain; }
+        .product-card h4 { margin: 0.5em 0; font-size: 1em; height: 3em; }
+        .product-card .price { font-size: 1.2em; font-weight: bold; color: #d9534f; }
+        h1 { color: #333; }
+        a { text-decoration: none; color: inherit; }
+        .no-results { text-align: center; padding: 3em; color: #666; }
+    </style>
+</head>
+<body>
+    {% include 'buscar.html' %}
+
+    <div class="container">
+        <h1>Resultados de la búsqueda para: "<strong>{{ query }}</strong>"</h1>
+        
+        {% if error %}
+            <div class="no-results">
+                <h2>Error en la búsqueda</h2>
+                <p>{{ error }}</p>
+            </div>
+        {% elif results %}
+             <div class="product-grid">
+        {% for product in results %}
+            <a href="/products/{{ product['id'] }}">
+                <div class="product-card">
+                    <img src="{{ product['thumbnail'] }}" alt="Imagen de {{ product['display_name'] }}">
+                    <h4>{{ product['display_name'] }}</h4>
+                    <p class="price">{{ product['unit_price'] }} €</p>
+                </div>
+            </a>
+        {% endfor %}
+    </div>
+        {% else %}
+            <div class="no-results">
+                <h2>No se encontraron resultados</h2>
+                <p>No hay productos que coincidan con tu búsqueda. Inténtalo con otra palabra.</p>
+            </div>
+        {% endif %}
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ product.display_name }}</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; background-color: #f9f9f9; }
+        .container { max-width: 1000px; margin: 2em auto; background: white; padding: 2em; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .product-header { display: grid; grid-template-columns: 1fr 1fr; gap: 2em; align-items: start; }
+        .product-image img { width: 100%; border-radius: 8px; border: 1px solid #eee; }
+        .product-info h1 { margin-top: 0; color: #333; }
+        .product-info .brand { font-size: 1.2em; color: #666; margin-bottom: 1em; }
+        .price-box { background: #fdf2f2; border: 1px solid #f9d6d6; padding: 1em; border-radius: 8px; margin: 1em 0; }
+        .price-box .unit-price { font-size: 2em; font-weight: bold; color: #d9534f; }
+        .price-box .ref-price { color: #555; }
+        .product-details { margin-top: 2em; border-top: 1px solid #eee; padding-top: 1em; }
+        .product-details h3 { color: #005432; border-bottom: 2px solid #9dcfbc; padding-bottom: 0.3em; }
+        .product-details p { white-space: pre-wrap; line-height: 1.6; }
+        a.back-link { display: inline-block; margin-bottom: 1em; color: #007BFF; text-decoration: none; }
+        a.back-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="javascript:history.back()" class="back-link">&larr; Volver</a>
+
+        <div class="product-header">
+            <div class="product-image">
+                {% if product.photos %}
+                <img src="{{ product.photos[0].regular }}" alt="Imagen de {{ product.display_name }}">
+                {% endif %}
+            </div>
+
+            <div class="product-info">
+                <h1>{{ product.display_name }}</h1>
+                <p class="brand">Marca: <strong>{{ product.brand }}</strong></p>
+                <p>Formato: {{ product.packaging }}</p>
+                <p>EAN: {{ product.ean }}</p>
+
+                <div class="price-box">
+                    <span class="unit-price">{{ product.price_instructions.unit_price }} €</span>
+                    <span class="ref-price">
+                        / {{ product.price_instructions.unit_size }} {{ product.price_instructions.size_format }} 
+                        ({{ product.price_instructions.reference_price }} €/{{ product.price_instructions.reference_format }})
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="product-details">
+            <h3>Descripción</h3>
+            <p>{{ product.details.legal_name }}</p>
+
+            {% if product.nutrition_information.ingredients %}
+            <h3>Ingredientes</h3>
+            <p>{{ product.nutrition_information.ingredients | safe }}</p>
+            {% endif %}
+
+            {% if product.details.storage_instructions %}
+            <h3>Conservación y uso</h3>
+            <p>{{ product.details.storage_instructions }}</p>
+            {% endif %}
+            
+            {% if product.details.mandatory_mentions %}
+            <h3>Menciones obligatorias</h3>
+            <p>{{ product.details.mandatory_mentions }}</p>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

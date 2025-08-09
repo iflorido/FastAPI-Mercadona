@@ -21,9 +21,10 @@
     </style>
 </head>
 <body>
+     {% include 'buscar.html' %}
     <div class="container">
         <a href="javascript:history.back()" class="back-link">&larr; Volver</a>
-
+        <a href="/" class="back-link">🏠 Inicio</a>
         <div class="product-header">
             <div class="product-image">
                 {% if product.photos %}

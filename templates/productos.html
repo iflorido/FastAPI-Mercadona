@@ -68,12 +68,14 @@
 
                 <div class="card bg-light border-0">
                     <div class="card-body">
-                        <form onsubmit="event.preventDefault(); alert('Funcionalidad de carrito próximamente');" class="row g-3 align-items-center">
+                        <form action="/cart/add" method="post" class="row g-3 align-items-center">
+                            <input type="hidden" name="product_id" value="{{ product.id }}">
+                            
                             <div class="col-auto">
                                 <label for="cantidad" class="col-form-label fw-bold">Cantidad:</label>
                             </div>
                             <div class="col-auto">
-                                <input type="number" id="cantidad" class="form-control" value="1" min="1" max="50" style="width: 80px;">
+                                <input type="number" name="quantity" id="cantidad" class="form-control" value="1" min="1" max="50" style="width: 80px;">
                             </div>
                             <div class="col-auto">
                                 <button type="submit" class="btn btn-success w-100">

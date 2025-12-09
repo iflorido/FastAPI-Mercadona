@@ -9,6 +9,8 @@ from pydantic import BaseModel, ValidationError
 from typing import List, Optional
 import httpx
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+from fastapi import Form
 
 # --- Aquí vamos a definir los modelos para incluir los datos en el Sql ---
 
@@ -111,6 +113,7 @@ class ApiResponseSimple(BaseModel):
 # --- Despues de definir todas las clases para la base de datos comenzamos con la aplicación FastAPI ---
 
 app = FastAPI()
+app.add_middleware(SessionMiddleware, secret_key="una_clave_muy_secreta_y_aleatoria")
 
 origins = [
     "*" # Permite todas las fuentes, ideal para desarrollo.
@@ -295,6 +298,8 @@ async def update_db_endpoint(background_tasks: BackgroundTasks):
     background_tasks.add_task(sync_database)
     return RedirectResponse(url="/", status_code=303)
 
+
+    
 # --- Comenzamos con ENDPOINTS - Aquí tendremos tanto los de la web como de la aplicación de React Navite---
 
 @app.get("/", response_class=HTMLResponse) # este sería el index
@@ -551,4 +556,92 @@ async def search_products_api(query: str):
 
     # Devuelve los resultados directamente, los pasamos a JSON para que REACT lo entienda, resolvemos el error de serialización
     return results
+
+
+# añadimos la parte del carrito
+
+def parse_price(price_str):
+    if not price_str:
+        return 0.0
+    try:
+        # Eliminamos el símbolo de euro, espacios y reemplazamos coma por punto
+        clean_str = price_str.replace('€', '').replace(',', '.').strip()
+        return float(clean_str)
+    except ValueError:
+        return 0.0
+
+@app.post("/cart/add")
+async def add_to_cart(request: Request, product_id: str = Form(...), quantity: int = Form(...)):
+    """Añade un producto al carrito (guardado en la sesión)."""
+    # Obtenemos el carrito actual de la sesión o creamos uno vacío
+    cart = request.session.get("cart", {})
+    
+    # Si el producto ya está, sumamos la cantidad, si no, lo creamos
+    if product_id in cart:
+        cart[product_id] += quantity
+    else:
+        cart[product_id] = quantity
+    
+    # Guardamos el carrito actualizado en la sesión
+    request.session["cart"] = cart
+    
+    # Redirigimos al usuario a la vista del carrito
+    return RedirectResponse(url="/carrito", status_code=303)
+
+@app.post("/cart/update")
+async def update_cart(request: Request, product_id: str = Form(...), quantity: int = Form(...), action: str = Form(...)):
+    """Actualiza la cantidad o elimina un producto."""
+    cart = request.session.get("cart", {})
+    
+    if action == "delete":
+        if product_id in cart:
+            del cart[product_id]
+    elif action == "update":
+        if product_id in cart:
+            if quantity > 0:
+                cart[product_id] = quantity
+            else:
+                del cart[product_id] # Si pone 0, lo borramos
+                
+    request.session["cart"] = cart
+    return RedirectResponse(url="/carrito", status_code=303)
+
+@app.get("/carrito", response_class=HTMLResponse)
+async def view_cart(request: Request):
+    """Muestra los productos que hay en el carrito."""
+    cart = request.session.get("cart", {})
+    
+    cart_items = []
+    total_price = 0.0
+    
+    # Conectamos a la BD para recuperar los detalles (foto, nombre, precio) de los IDs guardados en sesión
+    conn = sqlite3.connect(DB_FILE, timeout=10)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    for product_id, quantity in cart.items():
+        cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
+        product = cursor.fetchone()
+        
+        if product:
+            price_float = parse_price(product["unit_price"])
+            subtotal = price_float * quantity
+            total_price += subtotal
+            
+            cart_items.append({
+                "id": product["id"],
+                "display_name": product["display_name"],
+                "thumbnail": product["thumbnail"],
+                "unit_price": product["unit_price"], # String original para mostrar
+                "quantity": quantity,
+                "subtotal": f"{subtotal:.2f} €" # Formateado
+            })
+            
+    conn.close()
+    
+    return templates.TemplateResponse("carrito.html", {
+        "request": request,
+        "cart_items": cart_items,
+        "total_price": f"{total_price:.2f}"
+    })
 

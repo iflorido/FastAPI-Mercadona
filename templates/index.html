@@ -3,65 +3,134 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mercadona API - Inicio</title>
+    
+    <title>Mercadona API Explorer | Desarrollo FastAPI & Python por Ignacio Florido</title>
+    <meta name="description" content="Proyecto de demostración técnica desarrollado por Ignacio Florido. Tienda online y Backend generados con Python y FastAPI consumiendo la API de Mercadona. Soporte para web y aplicación móvil.">
+    <meta name="keywords" content="Ignacio Florido, Python, FastAPI, Mercadona API, Backend Developer, Portfolio, SQLite, React Native Backend, Desarrollo Web">
+    <meta name="author" content="Ignacio Florido">
+    <meta name="robots" content="index, follow">
+    
+    <link rel="canonical" href="https://cv.iflorido.es"> <meta property="og:type" content="website">
+    <meta property="og:title" content="Mercadona API Explorer - Portfolio Ignacio Florido">
+    <meta property="og:description" content="Descubre cómo crear una tienda online eficiente usando Python, FastAPI y SQLite. Proyecto Fullstack desarrollado por Ignacio Florido.">
+    <meta property="og:url" content="https://cv.iflorido.es">
+    <meta property="og:site_name" content="Ignacio Florido Portfolio">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "FastAPI Mercadona Explorer",
+      "url": "https://cv.iflorido.es",
+      "description": "Aplicación web y API Backend desarrollada en Python con FastAPI que simula una tienda online obteniendo datos de Mercadona en tiempo real y cacheando en SQLite.",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "All",
+      "author": {
+        "@type": "Person",
+        "name": "Ignacio Florido",
+        "url": "https://cv.iflorido.es",
+        "jobTitle": "Python & FastAPI Developer"
+      },
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "EUR"
+      },
+      "programmingLanguage": ["Python", "FastAPI", "HTML5", "Jinja2"]
+    }
+    </script>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Oxygen:wght@300;400;700&display=swap" rel="stylesheet">
     
     <style>
-        body { background-color: #f8f9fa; font-family: 'Oxygen', sans-serif; }
+        body { 
+            background-color: #f8f9fa;
+            font-family: 'Oxygen', sans-serif;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh; /* Para que el footer se quede abajo */
+        }
+
         .hero-section {
-            background-color: #005432; /* Verde Mercadona */
+            background-color: #005432; 
             color: white;
-            padding: 2rem 0;
+            padding: 3rem 0;
             margin-bottom: 2rem;
             border-radius: 0 0 15px 15px;
+            box-shadow: 0 4px 15px rgba(0,84,50,0.3);
         }
+        
         .category-card {
-            transition: transform 0.2s;
+            transition: transform 0.2s, box-shadow 0.2s;
             height: 100%;
             border: none;
             box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         }
+        
         .category-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
         }
+        
         .subcat-link {
             text-decoration: none;
             color: #555;
             display: block;
-            padding: 5px 0;
-            transition: color 0.2s;
+            padding: 6px 0;
+            transition: all 0.2s;
         }
+        
         .subcat-link:hover {
             color: #005432;
-            padding-left: 5px; /* Pequeño efecto de movimiento */
+            padding-left: 8px;
             font-weight: 700;
         }
+        
         .card-header-custom {
             background-color: white;
-            border-bottom: 2px solid #9dcfbc;
+            border-bottom: 3px solid #9dcfbc;
             color: #005432;
             font-weight: 700;
+            padding: 1rem;
         }
-        /* Estilo para el badge del carrito */
-        .cart-badge {
-            font-size: 0.75rem;
-            position: absolute;
-            top: 5px;
-            right: 5px;
+
+        /* Estilos del Footer */
+        .footer {
+            margin-top: auto;
+            background-color: #212529;
+            color: #adb5bd;
+            padding: 2rem 0;
+            font-size: 0.9rem;
+        }
+        .footer a {
+            color: #fff;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        .footer a:hover {
+            color: #198754; /* Verde Bootstrap */
         }
     </style>
 </head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-WQBVHTGWSE"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-WQBVHTGWSE');
+</script>
 <body>
 
     <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
         <div class="container">
             <a class="navbar-brand fw-bold text-success" href="/">
-                <i class="bi bi-shop"></i> Mercadona API
+                <i class="bi bi-shop"></i> Mercadona Explorer
             </a>
             
             <div class="d-flex align-items-center">
@@ -70,7 +139,6 @@
                     {% if cart_count > 0 %}
                     <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
                         {{ cart_count }}
-                        <span class="visually-hidden">productos en el carrito</span>
                     </span>
                     {% endif %}
                 </a>
@@ -80,10 +148,13 @@
 
     <div class="hero-section text-center">
         <div class="container">
-            <h1 class="display-5 fw-bold">🛒 Todas las Categorías</h1>
-            <p class="lead">Explora los productos disponibles en tiempo real</p>
+            <h1 class="display-5 fw-bold mb-3">🛒 FastAPI Mercadona Explorer</h1>
+            <p class="lead mb-4">
+                Proyecto tecnológico desarrollado en <strong>Python</strong> para consumo de API en tiempo real.<br>
+                Backend optimizado para Web y App Móvil.
+            </p>
             
-            <div class="d-flex justify-content-center mt-4">
+            <div class="d-flex justify-content-center">
                 <div class="col-md-8 bg-white p-3 rounded text-dark shadow-sm">
                     {% include 'buscar.html' %}
                 </div>
@@ -118,6 +189,32 @@
             
         </div>
     </div>
+
+    <footer class="footer">
+        <div class="container text-center">
+            <div class="row align-items-center">
+                <div class="col-md-6 text-md-start mb-3 mb-md-0">
+                    <h5 class="text-white mb-1">Desarrollado por Ignacio Florido</h5>
+                    <p class="mb-0 small">
+                        Implementación Fullstack con <strong>FastAPI</strong>, <strong>Python</strong> & <strong>SQLite</strong>.
+                    </p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <a href="https://cv.iflorido.es" target="_blank" class="btn btn-outline-light btn-sm me-2">
+                        <i class="bi bi-person-circle"></i> Ver CV / Portfolio
+                    </a>
+                    <a href="https://github.com/iflorido/FastAPI-Mercadona" target="_blank" class="btn btn-dark btn-sm border-secondary">
+                        <i class="bi bi-github"></i> Código en GitHub
+                    </a>
+                </div>
+            </div>
+            <hr class="my-4 border-secondary">
+            <div class="small text-muted">
+                Este proyecto es una demostración técnica educativa y no está afiliada oficialmente con Mercadona.
+                Los datos son obtenidos a través de su API pública para fines de desarrollo de software.
+            </div>
+        </div>
+    </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>

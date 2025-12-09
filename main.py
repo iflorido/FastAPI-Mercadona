@@ -11,6 +11,7 @@ import httpx
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi import Form
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware # para que funcione bien detrás de un proxy como Nginx con HTTPS.
 
 # --- Aquí vamos a definir los modelos para incluir los datos en el Sql ---
 
@@ -113,6 +114,7 @@ class ApiResponseSimple(BaseModel):
 # --- Despues de definir todas las clases para la base de datos comenzamos con la aplicación FastAPI ---
 
 app = FastAPI()
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"]) # para que funcione bien detrás de un proxy como Nginx con HTTPS.
 app.add_middleware(SessionMiddleware, secret_key="una_clave_muy_secreta_y_aleatoria")
 
 origins = [

@@ -309,6 +309,10 @@ async def get_all_categories(request: Request):
     y las pasa a la plantilla index.html para que las muestre.
     """
     try:
+        cart = request.session.get("cart", {})
+        # Sumamos todos los valores (cantidades) del diccionario
+        cart_count = sum(cart.values())
+        
         async with httpx.AsyncClient() as client:
             response = await client.get(MERCADONA_API_URL)
             response.raise_for_status() 
@@ -322,7 +326,8 @@ async def get_all_categories(request: Request):
     
         return templates.TemplateResponse("index.html", {
             "request": request,
-            "main_categories": api_data.results 
+            "main_categories": api_data.results,
+            "cart_count": cart_count
         })
 
     except httpx.RequestError as exc:

@@ -3,43 +3,118 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Categorías de Mercadona</title>
+    <title>Mercadona API - Inicio</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
     <style>
-        body { font-family: sans-serif; margin: 2em; background-color: #f9f9f9; }
-        .category-block { 
-            background-color: white; 
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 1em 1.5em; 
-            margin-bottom: 1.5em; 
+        body { background-color: #f8f9fa; }
+        .hero-section {
+            background-color: #005432; /* Verde Mercadona */
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            border-radius: 0 0 15px 15px;
         }
-        h1 { text-align: center; color: #333; }
-        h2 { color: #005432; border-bottom: 2px solid #9dcfbc; padding-bottom: 0.3em;}
-        ul { list-style-type: none; padding-left: 0.5em; }
-        li { margin: 0.5em 0; }
-        a { text-decoration: none; color: #007BFF; }
-        a:hover { text-decoration: underline; }
+        .category-card {
+            transition: transform 0.2s;
+            height: 100%;
+            border: none;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .category-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .subcat-link {
+            text-decoration: none;
+            color: #555;
+            display: block;
+            padding: 5px 0;
+            transition: color 0.2s;
+        }
+        .subcat-link:hover {
+            color: #005432;
+            padding-left: 5px; /* Pequeño efecto de movimiento */
+        }
+        .card-header-custom {
+            background-color: white;
+            border-bottom: 2px solid #9dcfbc;
+            color: #005432;
+            font-weight: bold;
+        }
+        /* Estilo para el badge del carrito */
+        .cart-badge {
+            font-size: 0.75rem;
+            position: absolute;
+            top: 5px;
+            right: 5px;
+        }
     </style>
 </head>
 <body>
-    {% include 'buscar.html' %}
-    <h1>🛒 Todas las Categorías de Productos</h1>
 
-    {% for main_cat in main_categories %}
-        <div class="category-block">
-            <h2>{{ main_cat.name }}</h2>
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
+        <div class="container">
+            <a class="navbar-brand fw-bold text-success" href="/">
+                <i class="bi bi-shop"></i> Mercadona API
+            </a>
             
-            <ul>
-                {% for subcategory in main_cat.categories %}
-                <li>
-                    <a href="{{ url_for('read_category', category_id=subcategory.id) }}">
-                        {{ subcategory.name }}
-                    </a>
-                </li>
-                {% endfor %}
-            </ul>
+            <div class="d-flex align-items-center">
+                <a href="/carrito" class="btn btn-outline-success position-relative me-2">
+                    <i class="bi bi-cart3 fs-5"></i>
+                    {% if cart_count > 0 %}
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                        {{ cart_count }}
+                        <span class="visually-hidden">productos en el carrito</span>
+                    </span>
+                    {% endif %}
+                </a>
+            </div>
         </div>
-    {% endfor %}
+    </nav>
 
+    <div class="hero-section text-center">
+        <div class="container">
+            <h1 class="display-5 fw-bold">🛒 Todas las Categorías</h1>
+            <p class="lead">Explora los productos disponibles en tiempo real</p>
+            
+            <div class="d-flex justify-content-center mt-4">
+                <div class="col-md-8 bg-white p-3 rounded text-dark shadow-sm">
+                    {% include 'buscar.html' %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mb-5">
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+            
+            {% for main_cat in main_categories %}
+            <div class="col">
+                <div class="card category-card">
+                    <div class="card-header card-header-custom">
+                        {{ main_cat.name }}
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            {% for subcategory in main_cat.categories %}
+                            <li>
+                                <a href="{{ url_for('read_category', category_id=subcategory.id) }}" class="subcat-link">
+                                    <i class="bi bi-chevron-right small text-success"></i> 
+                                    {{ subcategory.name }}
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

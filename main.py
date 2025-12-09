@@ -406,6 +406,9 @@ async def search_products(request: Request, query: str):
     Busca productos en la BD por palabras individuales en el nombre, o por EAN/ID exacto,
     y devuelve una página HTML con los resultados.
     """
+    cart = request.session.get("cart", {})
+    cart_count = sum(cart.values())
+    
     conn = sqlite3.connect(DB_FILE, timeout=10)
     conn.execute('PRAGMA journal_mode=WAL')
     conn.row_factory = sqlite3.Row
@@ -442,7 +445,8 @@ async def search_products(request: Request, query: str):
     return templates.TemplateResponse("resultados.html", {
         "request": request,
         "query": query,
-        "results": results
+        "results": results,
+        "cart_count": cart_count # Pasamos el conteo del carrito.
     })
 
 
@@ -462,6 +466,8 @@ async def read_category(request: Request, category_id: int):
     Obtiene los detalles de una categoría específica (incluyendo sus productos)
     desde la API de Mercadona y los muestra.
     """
+    cart = request.session.get("cart", {})
+    cart_count = sum(cart.values())
     # Construimos la URL dinámicamente con el ID de la categoría
     category_url = f"https://tienda.mercadona.es/api/categories/{category_id}"
     
@@ -481,7 +487,8 @@ async def read_category(request: Request, category_id: int):
         # Pasamos los datos completos de la categoría a la plantilla
         return templates.TemplateResponse("categoria.html", {
             "request": request,
-            "category": category_data
+            "category": category_data,
+            "cart_count": cart_count # Pasamos el conteo del carrito.
         })
 
     except httpx.RequestError as exc:

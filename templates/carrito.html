@@ -11,30 +11,18 @@
         .cart-img { width: 80px; height: 80px; object-fit: contain; }
         .total-box { background-color: #f8f9fa; padding: 20px; border-radius: 10px; }
         body { background-color: #f8f9fa; font-family: 'Oxygen', sans-serif; }
-        @media (max-width: 767px) {
-            /* Aplica solo en pantallas menores de 767px (Móviles y Tablets pequeñas) */
-            .container {
-                max-width: 96% !important; /* Usa casi todo el ancho */
-                padding-left: 6px !important; /* Reduce los huecos laterales */
-                padding-right: 6px !important;
-            }
-            
-            /* Ajuste extra para que el grid de productos no tenga tanto espacio entre ellos en móvil */
-            .g-4, .gx-4 {
-                --bs-gutter-x: 0.8rem; /* Reduce el espacio horizontal entre tarjetas */
-            }
-        }
+ 
     </style>
 </head>
 <body>
     <nav class="navbar navbar-light bg-light mb-4">
-        <div class="container">
+        <div class="container mb-5">
             <a class="navbar-brand fw-bold text-success" href="/">⬅ Seguir Comprando</a>
             <span class="navbar-text fw-bold">🛒 Carrito</span>
         </div>
     </nav>
 
-    <div class="container">
+    <div class="container mb-5">
         <h2 class="mb-4 navbar-brand fw-bold text-success">Resumen de tu pedido</h2>
 
         {% if cart_items %}

@@ -505,6 +505,9 @@ async def read_product(request: Request, product_id: str):
     Obtiene los detalles completos de un producto específico desde la API
     y los renderiza en la plantilla productos.html.
     """
+    cart = request.session.get("cart", {})
+    cart_count = sum(cart.values())
+    
     product_url = f"https://tienda.mercadona.es/api/products/{product_id}"
     
     try:
@@ -521,7 +524,8 @@ async def read_product(request: Request, product_id: str):
         
         return templates.TemplateResponse("productos.html", {
             "request": request,
-            "product": product_data
+            "product": product_data,
+            "cart_count": cart_count # Pasamos el conteo del carrito.
         })
 
     except httpx.RequestError as exc:

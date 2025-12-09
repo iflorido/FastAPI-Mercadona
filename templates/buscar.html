@@ -17,8 +17,10 @@
         </div>
     </form>
 
+{% if request.url.path != '/' %}
     <a href="/" class="btn btn-outline-secondary text-nowrap">
         🏠 Inicio
     </a>
+{% endif %}
     
     </div>

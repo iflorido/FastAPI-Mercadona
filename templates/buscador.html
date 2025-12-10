@@ -1,4 +1,14 @@
-<form action="/buscar" method="get">
-  <input type="text" name="q" placeholder="Buscar por ID, nombre o EAN">
-  <button type="submit">Buscar</button>
+<form action="/buscar" method="get" class="w-100">
+    <div class="input-group input-group-lg">
+        <input type="text" 
+               name="query" 
+               class="form-control" 
+               placeholder="Buscar por producto, ID o código EAN..." 
+               aria-label="Buscar productos" 
+               required>
+               
+        <button type="submit" class="btn btn-success">
+            <i class="bi bi-search"></i> Buscar
+        </button>
+    </div>
 </form>

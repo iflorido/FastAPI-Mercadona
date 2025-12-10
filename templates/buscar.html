@@ -3,8 +3,7 @@
     <form action="{{ url_for('search_products') }}" method="get" class="flex-grow-1 w-100">
         <div class="input-group">
             <span class="input-group-text bg-white text-muted border-end-0">
-                🔍
-            </span>
+                <i class="bi bi-search"></i> </span>
             
             <input type="search" 
                    name="query" 
@@ -19,8 +18,8 @@
 
 {% if request.url.path != '/' %}
     <a href="/" class="btn btn-outline-secondary text-nowrap">
-        🏠 Inicio
+        <i class="bi bi-house-door-fill"></i> Inicio
     </a>
 {% endif %}
     
-    </div>
+</div>

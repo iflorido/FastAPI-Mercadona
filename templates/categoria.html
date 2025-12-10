@@ -99,7 +99,7 @@
                 <div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-4">
                     {% for product in sub_cat.products %}
                     <div class="col">
-                        <a href="{{ url_for('read_product', product_id=product.id) }}" class="card-link">
+                        <a href="/products/{{ product.id }}-{{ product.display_name | slugify }}" class="card-link">
                             <div class="card product-card shadow-sm h-100">
                                 <img src="{{ product.thumbnail }}" class="card-img-top product-img" alt="{{ product.display_name }}">
                                 <div class="card-body d-flex flex-column justify-content-between">

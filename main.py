@@ -15,6 +15,8 @@ from starlette.middleware.sessions import SessionMiddleware
 from fastapi import Form
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware # para que funcione bien detrás de un proxy como Nginx con HTTPS.
 from fastapi import FastAPI, Response # para manejar respuestas personalizadas y crear sitemaps
+import unicodedata
+import re
 # --- Aquí vamos a definir los modelos para incluir los datos en el Sql ---
 
 
@@ -136,6 +138,28 @@ app.add_middleware(
 )
 # Definimos la carpeta 'templates'
 templates = Jinja2Templates(directory="templates")
+# Añadimos la función al entorno de Jinja para poder usarla en el HTML
+#Funcion para generar el sitemap dinámico
+
+def slugify(text: str) -> str:
+    """
+    Convierte un texto en un slug amigable para URL.
+    Ej: "Café con Leche" -> "cafe-con-leche"
+    """
+    if not text:
+        return ""
+    # Normaliza caracteres (quita tildes, ñ se vuelve n, etc.)
+    text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
+    # Convierte a minúsculas
+    text = text.lower()
+    # Reemplaza todo lo que no sea letra o número por guiones
+    text = re.sub(r'[^a-z0-9]+', '-', text)
+    # Elimina guiones al principio o final
+    return text.strip('-')
+
+#Funcion para generar el sitemap dinámico
+
+templates.env.filters["slugify"] = slugify
 
 # De aquí vamos a sacar toda la información de API de Mercadona
 MERCADONA_API_URL = "https://tienda.mercadona.es/api/categories/"
@@ -483,6 +507,8 @@ async def search_products(request: Request, query: str):
         "cart_count": cart_count # Pasamos el conteo del carrito.
     })
 
+
+
 @app.get("/sitemap.xml", include_in_schema=False)
 async def sitemap(request: Request):
     """
@@ -500,39 +526,52 @@ async def sitemap(request: Request):
     urls.append(f"{base_url}/buscar")
 
     # --- 2. Categorías (Desde la API externa) ---
-    # Al igual que haces en el index, consultamos la estructura de categorías
     try:
         async with httpx.AsyncClient() as client:
-            # Usamos un timeout corto para no bloquear si la API externa falla
             response = await client.get(MERCADONA_API_URL, timeout=5.0)
             if response.status_code == 200:
                 data = response.json()
-                # Recorremos los resultados para sacar los IDs de categorías principales
-                # Si quieres bajar a nivel de subcategorías, tendrías que iterar 'categories' dentro de cada resultado
+                
                 for category in data.get("results", []):
-                    # Asumiendo que tu ruta es /categories/{id}/
-                    urls.append(f"{base_url}/categories/{category['id']}/")
+                    # Generamos el slug para la categoría principal
+                    cat_id = category['id']
+                    cat_name = category['name']
+                    cat_slug = slugify(cat_name)
                     
-                    # Opcional: Si quieres incluir las subcategorías también
+                    # URL AMIGABLE: ID-NOMBRE
+                    urls.append(f"{base_url}/categories/{cat_id}-{cat_slug}")
+                    
+                    # Opcional: Subcategorías
                     for subcat in category.get("categories", []):
-                         urls.append(f"{base_url}/categories/{subcat['id']}/")
+                         sub_id = subcat['id']
+                         sub_name = subcat['name']
+                         sub_slug = slugify(sub_name)
+                         
+                         urls.append(f"{base_url}/categories/{sub_id}-{sub_slug}")
 
     except Exception as e:
         print(f"Error obteniendo categorías para sitemap: {e}")
 
     # --- 3. Productos (Desde tu SQLite Local) ---
     # Es mucho más rápido leer los productos de tu BD local que de la API
+    # --- 3. Productos (Desde tu SQLite Local) ---
     try:
         conn = sqlite3.connect(DB_FILE, timeout=5)
-        # Optimizamos para solo leer la columna ID
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM products")
+        # AHORA PEDIMOS TAMBIÉN EL NOMBRE
+        cursor.execute("SELECT id, display_name FROM products")
         products = cursor.fetchall()
         conn.close()
 
         for prod in products:
-            # prod[0] es el id
-            urls.append(f"{base_url}/products/{prod[0]}")
+            pid = prod[0]
+            name = prod[1]
+            
+            # Generamos el slug
+            slug = slugify(name)
+            
+            # La URL ahora es ID-SLUG (Ej: 12345-pan-de-molde)
+            urls.append(f"{base_url}/products/{pid}-{slug}")
             
     except Exception as e:
         print(f"Error obteniendo productos localmente: {e}")
@@ -559,11 +598,17 @@ async def update_db_endpoint():
 
 
 @app.get("/categories/{category_id}/", response_class=HTMLResponse)
-async def read_category(request: Request, category_id: int):
+async def read_category(request: Request, category_path: int):
     """
     Obtiene los detalles de una categoría específica (incluyendo sus productos)
     desde la API de Mercadona y los muestra.
     """
+    # 1. Extraemos el ID numérico (lo que hay antes del primer guion)
+    try:
+        category_id = int(category_path.split('-')[0])
+    except ValueError:
+        raise HTTPException(status_code=404, detail="ID de categoría inválido")
+    
     cart = request.session.get("cart", {})
     cart_count = sum(cart.values())
     # Construimos la URL dinámicamente con el ID de la categoría
@@ -598,11 +643,16 @@ async def read_category(request: Request, category_id: int):
 
 
 @app.get("/products/{product_id}", response_class=HTMLResponse)
-async def read_product(request: Request, product_id: str):
+async def read_product(request: Request, product_path: str):
     """
     Obtiene los detalles completos de un producto específico desde la API
     y los renderiza en la plantilla productos.html.
     """
+    # Truco: Tomamos todo lo que haya antes del primer guion '-'
+    # Si la URL es "12345-leche", el id es "12345".
+    # Si la URL es "12345", el id es "12345".
+    product_id = product_path.split('-')[0]
+    
     cart = request.session.get("cart", {})
     cart_count = sum(cart.values())
     

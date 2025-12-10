@@ -11,17 +11,26 @@
         .cart-img { width: 80px; height: 80px; object-fit: contain; }
         .total-box { background-color: #f8f9fa; padding: 20px; border-radius: 10px; }
         body { background-color: #f8f9fa; font-family: 'Oxygen', sans-serif; }
- @media (min-width: 768px) {
-            /* Aplica solo en pantallas menores de 767px (Móviles y Tablets pequeñas) */
+
+        /* NUEVO ESTILO: Para que el enlace del nombre se vea bien */
+        .product-link {
+            text-decoration: none;
+            color: #212529; /* Color oscuro por defecto */
+            font-weight: 600;
+        }
+        .product-link:hover {
+            color: #198754; /* Verde al pasar el ratón */
+            text-decoration: underline;
+        }
+
+        @media (min-width: 768px) {
             .container {
-                max-width: 96% !important; /* Usa casi todo el ancho */
-                padding-left: 6px !important; /* Reduce los huecos laterales */
+                max-width: 96% !important;
+                padding-left: 6px !important;
                 padding-right: 6px !important;
             }
-            
-            /* Ajuste extra para que el grid de productos no tenga tanto espacio entre ellos en móvil */
             .g-4, .gx-4 {
-                --bs-gutter-x: 0.8rem; /* Reduce el espacio horizontal entre tarjetas */
+                --bs-gutter-x: 0.8rem;
             }
         }
     </style>
@@ -58,8 +67,13 @@
                                     <tr>
                                         <td>
                                             <div class="d-flex align-items-center">
-                                                <img src="{{ item.thumbnail }}" alt="{{ item.display_name }}" class="cart-img me-3">
-                                                <span>{{ item.display_name }}</span>
+                                                <a href="/products/{{ item.id }}-{{ item.display_name | slugify }}">
+                                                    <img src="{{ item.thumbnail }}" alt="{{ item.display_name }}" class="cart-img me-3">
+                                                </a>
+                                                
+                                                <a href="/products/{{ item.id }}-{{ item.display_name | slugify }}" class="product-link">
+                                                    {{ item.display_name }}
+                                                </a>
                                             </div>
                                         </td>
                                         <td>{{ item.unit_price }}</td>

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <title>Mercadona API  | Desarrollo FastAPI & Python por Ignacio Florido</title>
+    <title>Mercadona API | Desarrollo FastAPI & Python por Ignacio Florido</title>
     <meta name="description" content="Proyecto de demostración técnica desarrollado por Ignacio Florido. Tienda online y Backend generados con Python y FastAPI consumiendo la API de Mercadona. Soporte para web y aplicación móvil.">
     <meta name="keywords" content="Ignacio Florido, Python, FastAPI, Mercadona API, Backend Developer, Portfolio, SQLite, React Native Backend, Desarrollo Web">
     <meta name="author" content="Ignacio Florido">
@@ -14,7 +14,7 @@
     <meta property="og:title" content="Mercadona API Explorer - Portfolio Ignacio Florido">
     <meta property="og:description" content="Descubre cómo crear una tienda online eficiente usando Python, FastAPI y SQLite. Proyecto Fullstack desarrollado por Ignacio Florido.">
     <meta property="og:url" content="https://mercaapi.automaworks.es/">
-    <meta property="og:site_name" content="Mercadona API  | Desarrollo FastAPI & Python por Ignacio Florido">
+    <meta property="og:site_name" content="Mercadona API | Desarrollo FastAPI & Python por Ignacio Florido">
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -52,7 +52,7 @@
             font-family: 'Oxygen', sans-serif;
             display: flex;
             flex-direction: column;
-            min-height: 100vh; /* Para que el footer se quede abajo */
+            min-height: 100vh;
         }
 
         .hero-section {
@@ -98,7 +98,6 @@
             padding: 1rem;
         }
 
-        /* Estilos del Footer */
         .footer {
             margin-top: auto;
             background-color: #212529;
@@ -112,11 +111,10 @@
             transition: color 0.3s;
         }
         .footer a:hover {
-            color: #198754; /* Verde Bootstrap */
+            color: #198754;
         }
     </style>
 </head>
-<!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-WQBVHTGWSE"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -175,7 +173,7 @@
                         <ul class="list-unstyled mb-0">
                             {% for subcategory in main_cat.categories %}
                             <li>
-                                <a href="{{ url_for('read_category', category_id=subcategory.id) }}" class="subcat-link">
+                                <a href="/categories/{{ subcategory.id }}-{{ subcategory.name | slugify }}" class="subcat-link">
                                     <i class="bi bi-chevron-right small text-success"></i> 
                                     {{ subcategory.name }}
                                 </a>

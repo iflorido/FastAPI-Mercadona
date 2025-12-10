@@ -162,21 +162,32 @@ def create_database_and_table():
 async def sync_database():
     try:
         create_database_and_table() 
-        print("--- INICIANDO SINCRONIZACIÓN (Background Task) ---", flush=True)
+        print("--- INICIANDO SINCRONIZACIÓN (Modo Seguro) ---", flush=True)
         
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'}
-        semaphore = asyncio.Semaphore(5) # Mantenemos 5 para ser amigables
+        # CAMBIO 1: User-Agent robusto y Semáforo más bajo (3 en vez de 5) para no agobiar al servidor
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+            'Accept-Language': 'es-ES,es;q=0.9',
+        }
+        semaphore = asyncio.Semaphore(3) 
 
-        async with httpx.AsyncClient(headers=headers, timeout=30.0) as client:
+        # CAMBIO 2: Timeout general aumentado a 40 segundos
+        async with httpx.AsyncClient(headers=headers, timeout=40.0) as client:
             
-            # --- FASE 1: OBTENER TODOS LOS IDS DE PRODUCTO ÚNICOS --- #
+            # ==============================================================================
+            # --- FASE 1: OBTENER TODOS LOS IDS DE PRODUCTO ÚNICOS ---
+            # ==============================================================================
             print("Fase 1: Descargando estructura de categorías...", flush=True)
             
             # 1. Obtener categorías principales
-            response = await client.get("https://tienda.mercadona.es/api/categories/")
-            response.raise_for_status()
-            api_data = ApiResponseSimple(**response.json())
-            
+            try:
+                response = await client.get("https://tienda.mercadona.es/api/categories/")
+                response.raise_for_status()
+                api_data = ApiResponseSimple(**response.json())
+            except Exception as e:
+                print(f"❌ Error fatal obteniendo categorías principales: {e}", flush=True)
+                return
+
             # 2. Extraer IDs de subcategorías
             all_subcategory_ids = [
                 sub_cat.id 
@@ -187,13 +198,12 @@ async def sync_database():
             total_cats = len(all_subcategory_ids)
             print(f"-> Se han encontrado {total_cats} subcategorías. Procesando...", flush=True)
 
-            # Variable para contar progreso (mutable list hack o clase simple)
-            progress = {"count": 0}
+            progress = {"count": 0, "errors": 0}
 
             async def fetch_product_list_from_category_with_progress(cat_id):
                 async with semaphore:
-                    # Reduje el sleep un poco para que sea más ágil, pero seguro
-                    await asyncio.sleep(random.uniform(0.2, 0.8)) 
+                    # CAMBIO 3: Pausa aleatoria más larga (0.3 a 1.0 segundos)
+                    await asyncio.sleep(random.uniform(0.3, 1.0)) 
                     try:
                         res = await client.get(f"https://tienda.mercadona.es/api/categories/{cat_id}")
                         res.raise_for_status()
@@ -203,63 +213,88 @@ async def sync_database():
                         for sub in cat_data.categories:
                             if sub.products:
                                 products_in_cat.extend(sub.products)
-                        
-                        # LOG DE PROGRESO
-                        progress["count"] += 1
-                        if progress["count"] % 10 == 0: # Imprimir cada 10 para no saturar
-                            print(f"   Fase 1: Procesadas {progress['count']}/{total_cats} categorías...", flush=True)
-                            
                         return products_in_cat
-                    except Exception as e:
-                        print(f"   [Error] Categoría {cat_id}: {e}", flush=True)
-                        return []
 
-            # Ejecutamos tareas
+                    except Exception as e:
+                        # Si falla una categoría, no es crítico, seguimos
+                        # print(f"   [Warn] Categoría {cat_id} falló: {e}", flush=True)
+                        return []
+                    finally:
+                        progress["count"] += 1
+                        if progress["count"] % 20 == 0:
+                            print(f"   Fase 1: Procesadas {progress['count']}/{total_cats} categorías...", flush=True)
+
+            # Ejecutamos tareas Fase 1
             tasks_f1 = [fetch_product_list_from_category_with_progress(cid) for cid in all_subcategory_ids]
             list_of_lists = await asyncio.gather(*tasks_f1)
             
-            # Aplanar
+            # Aplanar y limpiar
             all_products_stubs = [p for sublist in list_of_lists for p in sublist]
-            # IDs únicos
             unique_ids = list({p.id for p in all_products_stubs})
             
             print(f"✔ Fase 1 Completada: {len(unique_ids)} productos únicos encontrados.", flush=True)
+            
+            # Pausa de seguridad entre fases para "enfriar" la conexión
+            print("⏳ Pausa de 5 segundos antes de iniciar la descarga masiva...", flush=True)
+            await asyncio.sleep(5)
 
             
-            # --- FASE 2: OBTENER DETALLES (ESTA ES LA PARTE LENTA) --- #
+            # ==============================================================================
+            # --- FASE 2: OBTENER DETALLES (PARTE LENTA Y DELICADA) ---
+            # ==============================================================================
             total_prods = len(unique_ids)
-            print(f"Fase 2: Obteniendo detalles de {total_prods} productos (esto tardará un rato)...", flush=True)
+            print(f"Fase 2: Obteniendo detalles de {total_prods} productos. Paciencia, esto tardará...", flush=True)
             
-            progress["count"] = 0 # Reiniciar contador
+            progress["count"] = 0 
+            progress["errors"] = 0
 
             async def fetch_details_with_progress(pid):
                 async with semaphore:
-                    await asyncio.sleep(random.uniform(0.1, 0.5))
+                    # CAMBIO 4: Sleep considerablemente mayor (0.5 a 1.5s) para evitar bloqueos
+                    await asyncio.sleep(random.uniform(0.5, 1.5))
+                    
                     try:
+                        # Petición individual
                         res = await client.get(f"https://tienda.mercadona.es/api/products/{pid}")
-                        if res.status_code == 404:
-                            return None # Producto ya no existe
-                        res.raise_for_status()
                         
-                        # LOG DE PROGRESO
-                        progress["count"] += 1
-                        if progress["count"] % 50 == 0: # Imprimir cada 50 productos
-                            print(f"   Fase 2: Descargados {progress['count']}/{total_prods} productos...", flush=True)
-                            
+                        if res.status_code == 404:
+                            return None # Producto descatalogado o no disponible
+                        
+                        res.raise_for_status()
                         return ProductDetail(**res.json())
-                    except Exception as e:
-                        # Errores puntuales no deben detener el proceso
-                        # print(f"Error prod {pid}: {e}") 
-                        return None
 
+                    except httpx.TimeoutException:
+                        progress["errors"] += 1
+                        print(f"   [TIMEOUT] El producto {pid} tardó demasiado.", flush=True)
+                        return None
+                    except Exception as e:
+                        progress["errors"] += 1
+                        # Solo imprimimos errores ocasionales para no ensuciar la consola
+                        if progress["errors"] < 5 or progress["errors"] % 100 == 0:
+                            print(f"   [Error] Prod {pid}: {type(e).__name__} - {e}", flush=True)
+                        return None
+                    
+                    finally:
+                        # CAMBIO 5: Lógica de conteo movida al 'finally'. SE EJECUTA SIEMPRE.
+                        progress["count"] += 1
+                        # Imprimimos cada 50 productos
+                        if progress["count"] % 50 == 0: 
+                            print(f"   Fase 2: Procesados {progress['count']}/{total_prods} (Errores acumulados: {progress['errors']})...", flush=True)
+
+            # Ejecutamos tareas Fase 2
             tasks_f2 = [fetch_details_with_progress(pid) for pid in unique_ids]
             detailed_products = await asyncio.gather(*tasks_f2)
+            
+            # Filtramos los nulos (errores o 404)
             valid_products = [p for p in detailed_products if p is not None]
 
-            # --- FASE 3: GUARDAR --- #
-            print(f"Fase 3: Guardando {len(valid_products)} registros en SQLite...", flush=True)
+
+            # ==============================================================================
+            # --- FASE 3: GUARDAR EN SQLITE ---
+            # ==============================================================================
+            print(f"Fase 3: Guardando {len(valid_products)} registros válidos en base de datos...", flush=True)
             
-            conn = sqlite3.connect(DB_FILE, timeout=30) # Timeout más alto para escritura masiva
+            conn = sqlite3.connect(DB_FILE, timeout=60) # Timeout alto para escritura
             cursor = conn.cursor()
             
             data_tuples = [
@@ -275,11 +310,13 @@ async def sync_database():
             conn.commit()
             conn.close()
             
-            print(f"✅ SINCRONIZACIÓN FINALIZADA EXITOSAMENTE. {len(valid_products)} productos actualizados.", flush=True)
+            print(f"✅ SINCRONIZACIÓN FINALIZADA. {len(valid_products)} productos listos para escanear.", flush=True)
+            if progress["errors"] > 0:
+                print(f"⚠️ Nota: Hubo {progress['errors']} productos que no se pudieron descargar (timeouts o errores).", flush=True)
 
     except Exception as e:
-        print("\n❌ ERROR CRÍTICO EN LA TAREA DE FONDO:", flush=True)
-        traceback.print_exc() # Esto imprimirá el error real si algo falla en el código
+        print("\n❌ ERROR CRÍTICO NO CONTROLADO:", flush=True)
+        traceback.print_exc()
 
 
 # --- EVENTOS DE LA APLICACIÓN ---

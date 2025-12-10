@@ -597,8 +597,8 @@ async def update_db_endpoint():
     return RedirectResponse(url="/", status_code=303)
 
 
-@app.get("/categories/{category_id}/", response_class=HTMLResponse)
-async def read_category(request: Request, category_path: int):
+@app.get("/categories/{category_path}", response_class=HTMLResponse)
+async def read_category(request: Request, category_path: str):
     """
     Obtiene los detalles de una categoría específica (incluyendo sus productos)
     desde la API de Mercadona y los muestra.
@@ -642,7 +642,7 @@ async def read_category(request: Request, category_path: int):
 
 
 
-@app.get("/products/{product_id}", response_class=HTMLResponse)
+@app.get("/products/{product_path}", response_class=HTMLResponse)
 async def read_product(request: Request, product_path: str):
     """
     Obtiene los detalles completos de un producto específico desde la API

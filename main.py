@@ -2,17 +2,19 @@ import sqlite3
 import asyncio
 from pathlib import Path
 import random
+import traceback
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ValidationError
 from typing import List, Optional
 import httpx
+import sys
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi import Form
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware # para que funcione bien detrás de un proxy como Nginx con HTTPS.
-
+from fastapi import FastAPI, Response # para manejar respuestas personalizadas y crear sitemaps
 # --- Aquí vamos a definir los modelos para incluir los datos en el Sql ---
 
 
@@ -158,131 +160,126 @@ def create_database_and_table():
     conn.close()
 
 async def sync_database():
-    """
-    PAra no saturar la API, vamos a ir creando la base de datos en tres 
-    
-    1. Obtiene los IDs de todos los productos únicos.
-    2. Obtiene los detalles de cada producto.
-    3. Guarda la información en la base de datos local.
-    Esto hará que cuando hagamos una busqueda lo haga sobre la base de datos local y 
-    ya los resultados con el enlace de su id ya haga la consulta a la API de Mercadona.
-    """
-    create_database_and_table() 
-    print("Iniciando sincronización con la API de Mercadona...")
-    # <-- Le añadimos un User-Agent para evitar bloqueos por parte de la API
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'}
-    semaphore = asyncio.Semaphore(5)
-
-    # --- Función auxiliar para la Fase 1 ---
-    async def fetch_product_list_from_category(client, category_id):
-        """Obtiene la lista de productos de una subcategoría."""
-        async with semaphore:
-            await asyncio.sleep(random.uniform(0.5, 1.5))
-            try:
-                response = await client.get(f"https://tienda.mercadona.es/api/categories/{category_id}", timeout=20)
-                response.raise_for_status()
-                # Usamos el modelo que ya teníamos, que maneja productos opcionales.
-                category_data = CategoryDetail(**response.json())
-                # La respuesta anida la lista de productos dentro de otra lista 'categories'
-                all_products_in_cat = []
-                for sub_cat in category_data.categories:
-                    if sub_cat.products:
-                        all_products_in_cat.extend(sub_cat.products)
-                return all_products_in_cat
-            except (ValidationError, httpx.RequestError, httpx.HTTPStatusError) as e:
-                print(f"Omitiendo lista de productos de categoría {category_id} por error: {e}")
-                return []
-
-    # --- Función auxiliar para la Fase 2 ---
-    async def fetch_product_details(client, product_id):
-        """Obtiene los detalles completos de UN producto."""
-        async with semaphore:
-            await asyncio.sleep(random.uniform(0.5, 1.5))
-            try:
-                response = await client.get(f"https://tienda.mercadona.es/api/products/{product_id}", timeout=20)
-                response.raise_for_status()
-                product_data = ProductDetail(**response.json())
-                return product_data
-            except (ValidationError, httpx.RequestError, httpx.HTTPStatusError) as e:
-                print(f"Omitiendo detalles del producto {product_id} por error: {e}")
-                return None
-
-    # --- Lógica Principal de Sincronización ---
-    async with httpx.AsyncClient(headers=headers) as client:
+    try:
+        create_database_and_table() 
+        print("--- INICIANDO SINCRONIZACIÓN (Background Task) ---", flush=True)
         
-        # --- FASE 1: OBTENER TODOS LOS IDS DE PRODUCTO ÚNICOS --- #
-        
-        print("Fase 1: Obteniendo la lista de todas las subcategorías...")
-        try:
-            # 1 Obtener la estructura de categorías completa
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'}
+        semaphore = asyncio.Semaphore(5) # Mantenemos 5 para ser amigables
+
+        async with httpx.AsyncClient(headers=headers, timeout=30.0) as client:
+            
+            # --- FASE 1: OBTENER TODOS LOS IDS DE PRODUCTO ÚNICOS --- #
+            print("Fase 1: Descargando estructura de categorías...", flush=True)
+            
+            # 1. Obtener categorías principales
             response = await client.get("https://tienda.mercadona.es/api/categories/")
             response.raise_for_status()
             api_data = ApiResponseSimple(**response.json())
             
-            # 2. Extraer los IDs de todas las subcategorías
+            # 2. Extraer IDs de subcategorías
             all_subcategory_ids = [
                 sub_cat.id 
                 for main_cat in api_data.results 
                 for sub_cat in main_cat.categories
             ]
             
-            # 3. Crear tareas para obtener los productos de cada subcategoría en paralelo
-            tasks_get_products = [fetch_product_list_from_category(client, cat_id) for cat_id in all_subcategory_ids]
-            list_of_product_lists = await asyncio.gather(*tasks_get_products)
+            total_cats = len(all_subcategory_ids)
+            print(f"-> Se han encontrado {total_cats} subcategorías. Procesando...", flush=True)
+
+            # Variable para contar progreso (mutable list hack o clase simple)
+            progress = {"count": 0}
+
+            async def fetch_product_list_from_category_with_progress(cat_id):
+                async with semaphore:
+                    # Reduje el sleep un poco para que sea más ágil, pero seguro
+                    await asyncio.sleep(random.uniform(0.2, 0.8)) 
+                    try:
+                        res = await client.get(f"https://tienda.mercadona.es/api/categories/{cat_id}")
+                        res.raise_for_status()
+                        
+                        cat_data = CategoryDetail(**res.json())
+                        products_in_cat = []
+                        for sub in cat_data.categories:
+                            if sub.products:
+                                products_in_cat.extend(sub.products)
+                        
+                        # LOG DE PROGRESO
+                        progress["count"] += 1
+                        if progress["count"] % 10 == 0: # Imprimir cada 10 para no saturar
+                            print(f"   Fase 1: Procesadas {progress['count']}/{total_cats} categorías...", flush=True)
+                            
+                        return products_in_cat
+                    except Exception as e:
+                        print(f"   [Error] Categoría {cat_id}: {e}", flush=True)
+                        return []
+
+            # Ejecutamos tareas
+            tasks_f1 = [fetch_product_list_from_category_with_progress(cid) for cid in all_subcategory_ids]
+            list_of_lists = await asyncio.gather(*tasks_f1)
             
-            # 4. Aplanar la lista de listas de productos
-            all_products_stubs = [product for product_list in list_of_product_lists for product in product_list]
+            # Aplanar
+            all_products_stubs = [p for sublist in list_of_lists for p in sublist]
+            # IDs únicos
+            unique_ids = list({p.id for p in all_products_stubs})
             
-            # 5. Usar un set para obtener los IDs únicos y luego convertirlo a lista
-            all_product_ids = list({p.id for p in all_products_stubs})
+            print(f"✔ Fase 1 Completada: {len(unique_ids)} productos únicos encontrados.", flush=True)
+
             
-            print(f"Fase 1 completada. Se encontraron {len(all_product_ids)} productos únicos.")
+            # --- FASE 2: OBTENER DETALLES (ESTA ES LA PARTE LENTA) --- #
+            total_prods = len(unique_ids)
+            print(f"Fase 2: Obteniendo detalles de {total_prods} productos (esto tardará un rato)...", flush=True)
+            
+            progress["count"] = 0 # Reiniciar contador
 
-        except httpx.HTTPStatusError as e:
-            print(f"Error Crítico en Fase 1: {e}. No se puede continuar con la sincronización.")
-            return {"message": "Error al contactar la API. No se pudo actualizar."}
-        
+            async def fetch_details_with_progress(pid):
+                async with semaphore:
+                    await asyncio.sleep(random.uniform(0.1, 0.5))
+                    try:
+                        res = await client.get(f"https://tienda.mercadona.es/api/products/{pid}")
+                        if res.status_code == 404:
+                            return None # Producto ya no existe
+                        res.raise_for_status()
+                        
+                        # LOG DE PROGRESO
+                        progress["count"] += 1
+                        if progress["count"] % 50 == 0: # Imprimir cada 50 productos
+                            print(f"   Fase 2: Descargados {progress['count']}/{total_prods} productos...", flush=True)
+                            
+                        return ProductDetail(**res.json())
+                    except Exception as e:
+                        # Errores puntuales no deben detener el proceso
+                        # print(f"Error prod {pid}: {e}") 
+                        return None
 
-        # --- FASE 2: OBTENER LOS DETALLES DE CADA PRODUCTO POR SU ID --- #
-        
-        print(f"Fase 2: Obteniendo detalles de {len(all_product_ids)} productos únicos...")
-        tasks_get_details = [fetch_product_details(client, prod_id) for prod_id in all_product_ids]
-        detailed_products = await asyncio.gather(*tasks_get_details)
-        
-        # Filtramos los resultados que dieron error (None)
-        valid_products = [p for p in detailed_products if p is not None]
+            tasks_f2 = [fetch_details_with_progress(pid) for pid in unique_ids]
+            detailed_products = await asyncio.gather(*tasks_f2)
+            valid_products = [p for p in detailed_products if p is not None]
 
+            # --- FASE 3: GUARDAR --- #
+            print(f"Fase 3: Guardando {len(valid_products)} registros en SQLite...", flush=True)
+            
+            conn = sqlite3.connect(DB_FILE, timeout=30) # Timeout más alto para escritura masiva
+            cursor = conn.cursor()
+            
+            data_tuples = [
+                (p.id, p.ean, p.display_name, p.thumbnail, p.price_instructions.unit_price, p.share_url)
+                for p in valid_products
+            ]
+            
+            cursor.executemany("""
+            INSERT OR REPLACE INTO products (id, ean, display_name, thumbnail, unit_price, share_url)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """, data_tuples)
+            
+            conn.commit()
+            conn.close()
+            
+            print(f"✅ SINCRONIZACIÓN FINALIZADA EXITOSAMENTE. {len(valid_products)} productos actualizados.", flush=True)
 
-    # --- FASE 3: GUARDAR EN LA BASE DE DATOS --- #
-    # Aquí guardamos los productos válidos en la base de datos SQLite para que luego podamos hacer búsquedas rápidas.
-
-    print(f"Fase 3: Guardando {len(valid_products)} productos en la base de datos...")
-    conn = sqlite3.connect(DB_FILE, timeout=10)
-    conn.execute('PRAGMA journal_mode=WAL')
-    cursor = conn.cursor()
-    
-    products_to_insert = [
-        (
-            p.id,
-            p.ean,
-            p.display_name, 
-            p.thumbnail, 
-            p.price_instructions.unit_price, 
-            p.share_url
-        ) for p in valid_products
-    ]
-    
-    cursor.executemany("""
-    INSERT OR REPLACE INTO products (id, ean, display_name, thumbnail, unit_price, share_url)
-    VALUES (?, ?, ?, ?, ?, ?)
-    """, products_to_insert)
-    
-    conn.commit()
-    conn.close()
-    
-    count = len(products_to_insert)
-    print(f"Sincronización completada. Total de productos únicos guardados: {count}")
-    return {"message": f"Base de datos actualizada con {count} productos."}
+    except Exception as e:
+        print("\n❌ ERROR CRÍTICO EN LA TAREA DE FONDO:", flush=True)
+        traceback.print_exc() # Esto imprimirá el error real si algo falla en el código
 
 
 # --- EVENTOS DE LA APLICACIÓN ---
@@ -449,6 +446,70 @@ async def search_products(request: Request, query: str):
         "cart_count": cart_count # Pasamos el conteo del carrito.
     })
 
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap(request: Request):
+    """
+    Genera un sitemap dinámico combinando:
+    1. Páginas estáticas (inicio, buscar).
+    2. Categorías (consultadas a la API de Mercadona).
+    3. Productos (consultados a la BD local).
+    """
+    # Obtenemos la URL base (ej: http://localhost:8000 o tu dominio real)
+    base_url = str(request.base_url).rstrip("/")
+    urls = []
+
+    # --- 1. Páginas Estáticas ---
+    urls.append(f"{base_url}/")
+    urls.append(f"{base_url}/buscar")
+
+    # --- 2. Categorías (Desde la API externa) ---
+    # Al igual que haces en el index, consultamos la estructura de categorías
+    try:
+        async with httpx.AsyncClient() as client:
+            # Usamos un timeout corto para no bloquear si la API externa falla
+            response = await client.get(MERCADONA_API_URL, timeout=5.0)
+            if response.status_code == 200:
+                data = response.json()
+                # Recorremos los resultados para sacar los IDs de categorías principales
+                # Si quieres bajar a nivel de subcategorías, tendrías que iterar 'categories' dentro de cada resultado
+                for category in data.get("results", []):
+                    # Asumiendo que tu ruta es /categories/{id}/
+                    urls.append(f"{base_url}/categories/{category['id']}/")
+                    
+                    # Opcional: Si quieres incluir las subcategorías también
+                    for subcat in category.get("categories", []):
+                         urls.append(f"{base_url}/categories/{subcat['id']}/")
+
+    except Exception as e:
+        print(f"Error obteniendo categorías para sitemap: {e}")
+
+    # --- 3. Productos (Desde tu SQLite Local) ---
+    # Es mucho más rápido leer los productos de tu BD local que de la API
+    try:
+        conn = sqlite3.connect(DB_FILE, timeout=5)
+        # Optimizamos para solo leer la columna ID
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM products")
+        products = cursor.fetchall()
+        conn.close()
+
+        for prod in products:
+            # prod[0] es el id
+            urls.append(f"{base_url}/products/{prod[0]}")
+            
+    except Exception as e:
+        print(f"Error obteniendo productos localmente: {e}")
+
+    # --- 4. Construcción del XML ---
+    xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    
+    for url in urls:
+        xml_content += f'  <url>\n    <loc>{url}</loc>\n    <changefreq>daily</changefreq>\n  </url>\n'
+        
+    xml_content += '</urlset>'
+
+    return Response(content=xml_content, media_type="application/xml")
 
 # --- ENDPOINTS PARA ACTUALIZAR LA BASE DE DATOS MANUALMENTE, esto lo vamos a ocultar cuando este en producción
 # para que no se pueda pulsar cuando se accede, en una siguiente versión añadiremos un acceso privado para esto ---
@@ -662,4 +723,5 @@ async def view_cart(request: Request):
         "cart_items": cart_items,
         "total_price": f"{total_price:.2f}"
     })
+
 

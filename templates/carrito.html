@@ -8,9 +8,16 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Oxygen:wght@300;400;700&display=swap" rel="stylesheet">
     <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
         .cart-img { width: 80px; height: 80px; object-fit: contain; }
         .total-box { background-color: #f8f9fa; padding: 20px; border-radius: 10px; }
-        body { background-color: #f8f9fa; font-family: 'Oxygen', sans-serif; }
+        body { background-color: #f8f9fa; font-family: 'Oxygen', sans-serif; 
+            display: flex;             
+            flex-direction: column;    
+            min-height: 100vh;}
 
         /* NUEVO ESTILO: Para que el enlace del nombre se vea bien */
         .product-link {
@@ -32,6 +39,21 @@
             .g-4, .gx-4 {
                 --bs-gutter-x: 0.8rem;
             }
+        }
+         .footer {
+            margin-top: auto;
+            background-color: #212529;
+            color: #adb5bd;
+            padding: 2rem 0;
+            font-size: 0.9rem;
+        }
+        .footer a {
+            color: #fff;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        .footer a:hover {
+            color: #198754;
         }
     </style>
 </head>

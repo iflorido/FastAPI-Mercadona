@@ -1,7 +1,7 @@
 <script src="https://unpkg.com/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
 
 <style>
-    /* El contenedor de la cámara */
+    /* Contenedor principal de la cámara */
     #interactive.viewport {
         position: relative;
         width: 100%;
@@ -11,21 +11,51 @@
         border-radius: 8px;
     }
     
-    /* El video debe ocupar todo el espacio */
     #interactive.viewport > video {
         max-width: 100%;
         width: 100%;
         border-radius: 8px;
+        opacity: 0.8; /* Un poco oscuro para resaltar el cuadro de escaneo */
     }
 
-    /* El canvas donde Quagga dibuja las líneas verdes de detección */
+    /* Canvas donde se pintan las líneas verdes (debug) */
     #interactive.viewport > canvas.drawingBuffer {
         position: absolute;
         left: 0;
         top: 0;
         width: 100%;
         height: 100%;
-        border-radius: 8px;
+    }
+
+    /* EL CUADRO ROJO VISUAL (Guía para el usuario) */
+    /* Coincide con el área de lectura configurada en JS (80% ancho, 30% alto) */
+    .scanner-box {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 80%;
+        height: 150px;
+        border: 2px solid rgba(255, 0, 0, 0.7);
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); /* Oscurece el resto */
+        border-radius: 10px;
+        z-index: 10;
+    }
+    
+    .scanner-line {
+        position: absolute;
+        width: 100%;
+        height: 2px;
+        background: red;
+        top: 50%;
+        animation: scanline 2s infinite;
+        box-shadow: 0 0 4px red;
+    }
+
+    @keyframes scanline {
+        0% { top: 10%; opacity: 0; }
+        50% { opacity: 1; }
+        100% { top: 90%; opacity: 0; }
     }
 </style>
 
@@ -47,15 +77,19 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header bg-success text-white">
-        <h5 class="modal-title">Escanear Producto</h5>
+        <h5 class="modal-title">Escanear Código</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopScanner()"></button>
       </div>
-      <div class="modal-body p-0 bg-dark position-relative">
+      <div class="modal-body p-0 bg-dark text-center">
         
-        <div id="interactive" class="viewport"></div>
+        <div id="interactive" class="viewport">
+            <div class="scanner-box">
+                <div class="scanner-line"></div>
+            </div>
+        </div>
 
-        <div class="position-absolute bottom-0 start-0 w-100 p-2 text-white bg-dark bg-opacity-75 text-center">
-            <small>Si ves líneas verdes, ¡estamos detectando!</small>
+        <div class="p-2 text-white bg-dark">
+            <small>Centra el código en el recuadro</small>
         </div>
       </div>
     </div>
@@ -72,6 +106,20 @@
         modalElement.addEventListener('hidden.bs.modal', stopScanner);
     }
 
+    // Algoritmo para verificar si el código EAN-13 es matemáticamente válido
+    // Esto evita lecturas parciales (ej: lee 12 digitos en vez de 13)
+    function isValidEan13(code) {
+        if (!code || code.length !== 13) return false;
+        
+        let sum = 0;
+        for (let i = 0; i < 12; i++) {
+            sum += parseInt(code[i]) * (i % 2 === 0 ? 1 : 3);
+        }
+        
+        const checkDigit = (10 - (sum % 10)) % 10;
+        return checkDigit === parseInt(code[12]);
+    }
+
     function startQuagga() {
         Quagga.init({
             inputStream: {
@@ -79,81 +127,95 @@
                 type: "LiveStream",
                 target: document.querySelector('#interactive'),
                 constraints: {
-                    facingMode: "environment", // Cámara trasera
-                    // En Quagga no necesitamos ser tan estrictos con resoluciones
-                    // dejamos que negocie la mejor automáticamente
+                    facingMode: "environment",
+                    // Pedimos HD para ayudar al enfoque, pero Quagga es flexible
+                    width: { min: 640, ideal: 1280, max: 1920 },
+                    height: { min: 480, ideal: 720, max: 1080 },
+                },
+                // RECORTE DE ÁREA: Solo analizamos el centro (donde está el cuadro rojo)
+                area: { 
+                   top: "30%",    // Ignora el 30% superior
+                   right: "10%",  // Ignora el 10% derecho
+                   bottom: "30%", // Ignora el 30% inferior
+                   left: "10%"    // Ignora el 10% izquierdo
                 }
             },
-            // Configuramos solo lectores de códigos de barras (EAN)
-            decoder: {
-                readers: [
-                    "ean_reader", // EAN-13 (El estándar de Mercadona)
-                    "ean_8_reader" // Versión corta
-                ]
+            locator: {
+                patchSize: "medium", // 'medium' o 'large' va mejor para códigos de barras que 'x-small'
+                halfSample: true     // Procesa menos píxeles para ir más rápido
             },
-            // Configuramos la localización (las líneas verdes)
-            locate: true 
+            numOfWorkers: 2, // Usa 2 hilos del procesador
+            frequency: 10,   // Escanea 10 veces por segundo (ahorra batería y CPU)
+            decoder: {
+                readers: ["ean_reader"] // SOLO EAN-13 (Mercadona)
+            },
+            locate: true
         }, function(err) {
             if (err) {
                 console.log(err);
-                alert("Error al iniciar cámara: " + err);
+                alert("Error cámara: " + err);
                 return;
             }
-            console.log("Quagga iniciado");
             Quagga.start();
+            applyFocusFix(); // Intentar forzar enfoque después de iniciar
         });
 
-        // Evento: Cuando detecta una posible línea (dibuja caja verde)
+        // TRUCO PARA IOS/ANDROID: Aplicar enfoque una vez el video está corriendo
+        function applyFocusFix() {
+            const track = Quagga.CameraAccess.getActiveTrack();
+            if (track && typeof track.getCapabilities === 'function') {
+                const capabilities = track.getCapabilities();
+                // Si soporta enfoque, lo forzamos a continuo
+                if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+                    track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+                }
+            }
+        }
+
+        // Solo dibujamos cajas si la detección es muy segura
         Quagga.onProcessed(function(result) {
             var drawingCtx = Quagga.canvas.ctx.overlay,
                 drawingCanvas = Quagga.canvas.dom.overlay;
 
             if (result) {
-                // Limpiamos el canvas frame a frame
-                if (result.boxes) {
-                    drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
-                    result.boxes.filter(function (box) {
-                        return box !== result.box;
-                    }).forEach(function (box) {
-                        Quagga.ImageDebug.drawPath(box, {x: 0, y: 1}, drawingCtx, {color: "green", lineWidth: 2});
-                    });
-                }
-
+                drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
+                
+                // Solo dibujamos si hay una caja detectada con cierta confianza
                 if (result.box) {
-                    Quagga.ImageDebug.drawPath(result.box, {x: 0, y: 1}, drawingCtx, {color: "#00F", lineWidth: 2});
-                }
-
-                if (result.codeResult && result.codeResult.code) {
-                    Quagga.ImageDebug.drawPath(result.line, {x: 'x', y: 'y'}, drawingCtx, {color: 'red', lineWidth: 3});
+                    Quagga.ImageDebug.drawPath(result.box, {x: 0, y: 1}, drawingCtx, {color: "green", lineWidth: 2});
                 }
             }
         });
 
-        // Evento: Cuando CONFIRMA la lectura del código
         Quagga.onDetected(function(result) {
             var code = result.codeResult.code;
-            console.log("Código detectado:", code);
             
-            // Verificación simple: Mercadona usa EAN-13, deben ser números
-            if(code && code.length >= 8) {
+            // 1. Verificamos que sea un número
+            // 2. IMPORTANTE: Usamos la validación matemática
+            if (isValidEan13(code)) {
+                
+                // Vibración de éxito
+                if (navigator.vibrate) navigator.vibrate(200);
+                
+                console.log("Código VÁLIDO detectado:", code);
                 stopScanner();
                 
-                // Cerrar modal
                 const modalEl = document.getElementById('scannerModal');
                 const modal = bootstrap.Modal.getInstance(modalEl);
                 modal.hide();
 
-                // Rellenar y enviar
                 document.getElementById('search-input').value = code;
                 document.getElementById('searchForm').submit();
+            } else {
+                console.log("Lectura parcial o inválida ignorada:", code);
+                // No hacemos nada, Quagga sigue buscando hasta encontrar uno bueno
             }
         });
     }
 
     function stopScanner() {
         Quagga.stop();
-        // Limpiar el canvas manualmente para que no se quede la última imagen congelada
         const container = document.querySelector('#interactive');
-        if(container) container.innerHTML = ""; 
+        if(container) container.innerHTML = '<div class="scanner-box"><div class="scanner-line"></div></div>'; 
     }
 </script>

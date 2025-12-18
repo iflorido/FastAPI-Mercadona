@@ -1,18 +1,17 @@
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 
 <style>
-/* Ajuste para que el video no se deforme en iOS */
+/* Estilo para el contenedor del video */
 #reader {
     width: 100%;
-    background: #000;
     border-radius: 8px;
     overflow: hidden;
+    background: black;
 }
+/* Forzamos que el video no crezca más del 50% de la pantalla para que se vea el mensaje de abajo */
 #reader video {
     object-fit: cover;
-    border-radius: 8px;
-    /* En iOS es importante limitar la altura para que no ocupe toda la pantalla */
-    max-height: 50vh !important; 
+    max-height: 50vh !important;
 }
 </style>
 
@@ -20,13 +19,13 @@
     <form action="{{ url_for('search_products') }}" method="get" class="flex-grow-1 w-100" id="searchForm">
         <div class="input-group">
             <span class="input-group-text bg-white text-muted border-end-0"><i class="bi bi-search"></i></span>
-            <input type="search" id="search-input" name="query" class="form-control border-start-0 ps-0 border-end-0" placeholder="Buscar producto, marca o EAN..." aria-label="Buscar" required>
-            <button class="btn btn-outline-secondary border-start-0 border-end-0" type="button" onclick="openScanner()" title="Escanear"><i class="bi bi-upc-scan"></i></button>
+            <input type="search" id="search-input" name="query" class="form-control border-start-0 ps-0 border-end-0" placeholder="Buscar producto..." required>
+            <button class="btn btn-outline-secondary border-start-0 border-end-0" type="button" onclick="openScanner()"><i class="bi bi-upc-scan"></i></button>
             <button class="btn btn-success" type="submit">Buscar</button>
         </div>
     </form>
     {% if request.url.path != '/' %}
-        <a href="/" class="btn btn-outline-secondary text-nowrap"><i class="bi bi-house-door-fill"></i> Inicio</a>
+    <a href="/" class="btn btn-outline-secondary text-nowrap"><i class="bi bi-house-door-fill"></i> Inicio</a>
     {% endif %}
 </div>
 
@@ -34,14 +33,16 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header bg-success text-white">
-        <h5 class="modal-title"><i class="bi bi-upc-scan"></i> Escanear</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="stopScanner()"></button>
+        <h5 class="modal-title">Escanear Código</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopScanner()"></button>
       </div>
-      <div class="modal-body text-center p-0 bg-dark position-relative">
+      <div class="modal-body p-0 bg-dark position-relative text-center">
+        
         <div id="reader"></div>
-        <div class="position-absolute bottom-0 start-0 w-100 p-3 text-white bg-dark bg-opacity-75">
-            <p class="mb-1 fw-bold text-warning"><i class="bi bi-exclamation-triangle"></i> ¡No te acerques mucho!</p>
-            <small>Si se ve borroso, aleja el móvil unos 20cm.</small>
+
+        <div class="position-absolute bottom-0 start-0 w-100 p-3 text-white" style="background: rgba(0,0,0,0.8);">
+            <p class="mb-1 fw-bold text-warning" style="font-size: 1.1em;">⚠️ MANTÉN DISTANCIA</p>
+            <small>Si se ve borroso, <strong>aleja el móvil 20-30cm</strong> hasta que enfoque.</small>
         </div>
       </div>
     </div>
@@ -54,6 +55,7 @@
     function openScanner() {
         const myModal = new bootstrap.Modal(document.getElementById('scannerModal'));
         myModal.show();
+        
         const modalElement = document.getElementById('scannerModal');
         modalElement.addEventListener('shown.bs.modal', startCamera);
         modalElement.addEventListener('hidden.bs.modal', stopScanner);
@@ -65,39 +67,31 @@
         }
 
         const config = { 
-            fps: 15, // Más FPS ayuda a capturar el momento nítido
-            qrbox: function(viewfinderWidth, viewfinderHeight) {
-                // Caja rectangular más pequeña para obligar al usuario a centrar bien
-                const minEdgePercentage = 0.8; 
-                const qrboxWidth = Math.floor(viewfinderWidth * minEdgePercentage);
-                return { width: qrboxWidth, height: Math.floor(qrboxWidth * 0.4) };
-            },
+            fps: 20, // Escaneo rápido
+            // CAJA PEQUEÑA = EL USUARIO SE ALEJA = MEJOR ENFOQUE
+            qrbox: { width: 200, height: 100 }, 
+            aspectRatio: 1.0, 
             formatsToSupport: [ 
                 Html5QrcodeSupportedFormats.EAN_13, 
                 Html5QrcodeSupportedFormats.EAN_8,
                 Html5QrcodeSupportedFormats.UPC_A
-            ],
-            // En iOS esto a veces falla, mejor false para usar el decodificador por software robusto
-            useBarCodeDetectorIfSupported: false 
+            ]
         };
 
-        // ESTRATEGIA IOS: Pedir Alta Resolución (HD)
-        // Esto permite leer códigos estando más lejos (donde la cámara sí enfoca)
-        const constraints = { 
-            facingMode: "environment",
-            width: { min: 640, ideal: 1280, max: 1920 },
-            height: { min: 480, ideal: 720, max: 1080 }
-        };
+        // CONFIGURACIÓN MÍNIMA Y SEGURA PARA IOS
+        // No pedimos width/height para evitar el bloqueo de "OverconstrainedError"
+        const constraints = { facingMode: "environment" };
 
         html5QrcodeScanner.start(
             constraints, 
             config, 
-            onScanSuccess
+            onScanSuccess,
+            (errorMessage) => { 
+                // Ignoramos errores de lectura cuadro a cuadro
+            }
         ).catch(err => {
-            console.warn("Fallo configuración HD, intentando básica...", err);
-            // Fallback si el móvil no soporta HD
-            html5QrcodeScanner.start({ facingMode: "environment" }, config, onScanSuccess)
-            .catch(err2 => alert("Error cámara: " + err2));
+            console.error("Error start", err);
+            alert("No se pudo iniciar la cámara. Asegúrate de estar en HTTPS y dar permisos.");
         });
     }
 
@@ -109,12 +103,12 @@
 
     function onScanSuccess(decodedText) {
         stopScanner();
+        // Cerrar modal
         const modalEl = document.getElementById('scannerModal');
-        bootstrap.Modal.getInstance(modalEl).hide();
-        
-        // Efecto visual/vibración si el navegador lo soporta
-        if (navigator.vibrate) navigator.vibrate(200);
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        modal.hide();
 
+        // Rellenar y enviar
         document.getElementById('search-input').value = decodedText;
         document.getElementById('searchForm').submit();
     }

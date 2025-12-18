@@ -53,16 +53,13 @@
     let html5QrcodeScanner = null;
 
     function openScanner() {
-        // 1. Abrir modal
         const myModal = new bootstrap.Modal(document.getElementById('scannerModal'));
         myModal.show();
 
         const modalElement = document.getElementById('scannerModal');
         
-        // 2. Iniciar cámara solo cuando el modal ya se vea (evita errores de tamaño)
+        // Esperamos a que el modal termine de abrirse completamente
         modalElement.addEventListener('shown.bs.modal', startCamera);
-        
-        // 3. Detener cámara si cierran el modal
         modalElement.addEventListener('hidden.bs.modal', stopScanner);
     }
 
@@ -71,86 +68,73 @@
             html5QrcodeScanner = new Html5Qrcode("reader");
         }
 
-        // Configuración optimizada para iOS y Android
+        // 1. CONFIGURACIÓN DEL PROCESAMIENTO (Software)
         const config = { 
-            fps: 10, 
-            // IMPORTANTE: Usar función para qrbox evita errores de tamaño en iOS
+            fps: 10,
+            // Caja dinámica: crucial para que iOS no haga zoom extraño
             qrbox: function(viewfinderWidth, viewfinderHeight) {
-                // El cuadro de escaneo será el 80% del ancho de la vista o 250px (lo que sea menor)
-                const minEdgePercentage = 0.8; 
+                const minEdgePercentage = 0.85; 
                 const qrboxWidth = Math.floor(viewfinderWidth * minEdgePercentage);
-                const qrboxHeight = Math.floor(qrboxWidth * 0.45); // Altura proporcional para código de barras (más chato)
+                const qrboxHeight = Math.floor(qrboxWidth * 0.5); // Rectangular para código de barras
                 return {
                     width: qrboxWidth,
                     height: qrboxHeight
                 };
             },
-            // IMPORTANTE: Quitamos aspectRatio para que iOS use pantalla completa y enfoque mejor
-            // aspectRatio: 1.0, 
-            
+            // Solo buscamos estos formatos
             formatsToSupport: [ 
                 Html5QrcodeSupportedFormats.EAN_13, 
                 Html5QrcodeSupportedFormats.EAN_8,
-                Html5QrcodeSupportedFormats.CODE_128,
                 Html5QrcodeSupportedFormats.UPC_A
             ],
-            useBarCodeDetectorIfSupported: true 
+            // Desactivamos esto temporalmente por si causa conflicto en iOS
+            useBarCodeDetectorIfSupported: false 
         };
 
-        // Configuración específica de la cámara
-        const constraints = { 
-            facingMode: "environment", // Cámara trasera
-            focusMode: "continuous",   // Intento de forzar enfoque continuo (funciona en Android, iOS lo ignora a veces)
-            width: { min: 640, ideal: 1280, max: 1920 }, // Pedir resolución HD ayuda al enfoque en iOS
-            height: { min: 480, ideal: 720, max: 1080 }
-        };
+        // 2. CONFIGURACIÓN DE LA CÁMARA (Hardware)
+        // Para iOS: MENOS ES MÁS. Solo pedimos la cámara trasera.
+        // Si añadimos width/height/focusMode, iOS suele bloquearse.
+        const cameraIdOrConfig = { facingMode: "environment" };
 
         html5QrcodeScanner.start(
-            constraints, 
+            cameraIdOrConfig, 
             config, 
             onScanSuccess, 
             onScanFailure
         ).catch(err => {
-            console.error("Error iniciando cámara", err);
-            // Si falla con alta resolución, intentamos configuración básica (fallback para móviles viejos)
+            console.error("Error crítico al iniciar cámara:", err);
+            // Intento desesperado: Si falla la trasera, intenta "cualquier cámara"
+            // Esto a veces revive a iOS si está bloqueado con "environment"
             html5QrcodeScanner.start(
-                { facingMode: "environment" }, 
+                { facingMode: { exact: "environment" } }, 
                 config, 
-                onScanSuccess, 
-                onScanFailure
-            ).catch(err2 => alert("No se pudo iniciar la cámara: " + err2));
+                onScanSuccess
+            ).catch(err2 => {
+                 alert("No se pudo abrir la cámara. En iOS comprueba: Ajustes > Safari > Cámara > Permitir. Error: " + err2);
+            });
         });
     }
 
     function stopScanner() {
-        if (html5QrcodeScanner) {
-            // Verificamos si está escaneando antes de parar para evitar errores
-            if(html5QrcodeScanner.isScanning){
-                html5QrcodeScanner.stop().then(() => {
-                    html5QrcodeScanner.clear();
-                }).catch(err => console.log("Stop failed", err));
-            }
+        if (html5QrcodeScanner && html5QrcodeScanner.isScanning) {
+            html5QrcodeScanner.stop().then(() => {
+                html5QrcodeScanner.clear();
+            }).catch(err => console.log("Error al detener", err));
         }
     }
 
     function onScanSuccess(decodedText, decodedResult) {
-        // Reproducir un pitido (opcional, da feedback)
-        // const audio = new Audio('beep.mp3'); audio.play();
-
         stopScanner();
         
-        // Cerrar modal
         const modalEl = document.getElementById('scannerModal');
         const modal = bootstrap.Modal.getInstance(modalEl);
         modal.hide();
 
-        // Rellenar input y buscar
-        console.log(`Código detectado: ${decodedText}`);
         document.getElementById('search-input').value = decodedText;
         document.getElementById('searchForm').submit();
     }
 
     function onScanFailure(error) {
-        // No hacer nada, sigue intentando leer frames
+        // Ignorar fallos de lectura frame a frame
     }
 </script>

@@ -1,5 +1,11 @@
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-
+<style>
+#reader video {
+    max-height: 60vh !important; /* Ocupa máximo el 60% de la altura de la pantalla */
+    object-fit: cover;
+    border-radius: 8px;
+}
+</style>
 <div class="d-flex flex-column flex-md-row gap-2 align-items-center w-100">
     
     <form action="{{ url_for('search_products') }}" method="get" class="flex-grow-1 w-100" id="searchForm">
@@ -72,30 +78,54 @@
             html5QrcodeScanner = new Html5Qrcode("reader");
         }
 
+        // Configuración optimizada para iOS y Android
         const config = { 
             fps: 10, 
-            // Caja más ancha y baja, ideal para códigos de barras
-            qrbox: { width: 280, height: 100 }, 
-            aspectRatio: 1.0,
-            // IMPORTANTE: Definir qué formatos buscar
+            // IMPORTANTE: Usar función para qrbox evita errores de tamaño en iOS
+            qrbox: function(viewfinderWidth, viewfinderHeight) {
+                // El cuadro de escaneo será el 80% del ancho de la vista o 250px (lo que sea menor)
+                const minEdgePercentage = 0.8; 
+                const qrboxWidth = Math.floor(viewfinderWidth * minEdgePercentage);
+                const qrboxHeight = Math.floor(qrboxWidth * 0.45); // Altura proporcional para código de barras (más chato)
+                return {
+                    width: qrboxWidth,
+                    height: qrboxHeight
+                };
+            },
+            // IMPORTANTE: Quitamos aspectRatio para que iOS use pantalla completa y enfoque mejor
+            // aspectRatio: 1.0, 
+            
             formatsToSupport: [ 
                 Html5QrcodeSupportedFormats.EAN_13, 
                 Html5QrcodeSupportedFormats.EAN_8,
                 Html5QrcodeSupportedFormats.CODE_128,
                 Html5QrcodeSupportedFormats.UPC_A
             ],
-            // Activa detector nativo si el navegador lo soporta (más rápido en Android Chrome)
             useBarCodeDetectorIfSupported: true 
         };
 
+        // Configuración específica de la cámara
+        const constraints = { 
+            facingMode: "environment", // Cámara trasera
+            focusMode: "continuous",   // Intento de forzar enfoque continuo (funciona en Android, iOS lo ignora a veces)
+            width: { min: 640, ideal: 1280, max: 1920 }, // Pedir resolución HD ayuda al enfoque en iOS
+            height: { min: 480, ideal: 720, max: 1080 }
+        };
+
         html5QrcodeScanner.start(
-            { facingMode: "environment" }, // Cámara trasera
+            constraints, 
             config, 
             onScanSuccess, 
             onScanFailure
         ).catch(err => {
             console.error("Error iniciando cámara", err);
-            alert("Error: " + err);
+            // Si falla con alta resolución, intentamos configuración básica (fallback para móviles viejos)
+            html5QrcodeScanner.start(
+                { facingMode: "environment" }, 
+                config, 
+                onScanSuccess, 
+                onScanFailure
+            ).catch(err2 => alert("No se pudo iniciar la cámara: " + err2));
         });
     }
 

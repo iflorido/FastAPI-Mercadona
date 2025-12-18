@@ -1,6 +1,12 @@
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 <div class="d-flex flex-column flex-md-row gap-2 align-items-center w-100">
-    
+<style>
+#reader video {
+    max-height: 60vh !important; /* Ocupa máximo el 60% de la altura de la pantalla */
+    object-fit: cover;
+    border-radius: 8px;
+}
+</style>  
     <form action="{{ url_for('search_products') }}" method="get" class="flex-grow-1 w-100" id="searchForm">
         <div class="input-group">
             <span class="input-group-text bg-white text-muted border-end-0">

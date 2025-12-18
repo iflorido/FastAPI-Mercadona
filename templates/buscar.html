@@ -1,18 +1,32 @@
-<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script src="https://unpkg.com/@ericblade/quagga2@1.8.4/dist/quagga.min.js"></script>
 
 <style>
-/* Estilo para el contenedor del video */
-#reader {
-    width: 100%;
-    border-radius: 8px;
-    overflow: hidden;
-    background: black;
-}
-/* Forzamos que el video no crezca más del 50% de la pantalla para que se vea el mensaje de abajo */
-#reader video {
-    object-fit: cover;
-    max-height: 50vh !important;
-}
+    /* El contenedor de la cámara */
+    #interactive.viewport {
+        position: relative;
+        width: 100%;
+        height: auto;
+        overflow: hidden;
+        background: #000;
+        border-radius: 8px;
+    }
+    
+    /* El video debe ocupar todo el espacio */
+    #interactive.viewport > video {
+        max-width: 100%;
+        width: 100%;
+        border-radius: 8px;
+    }
+
+    /* El canvas donde Quagga dibuja las líneas verdes de detección */
+    #interactive.viewport > canvas.drawingBuffer {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 8px;
+    }
 </style>
 
 <div class="d-flex flex-column flex-md-row gap-2 align-items-center w-100">
@@ -33,16 +47,15 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header bg-success text-white">
-        <h5 class="modal-title">Escanear Código</h5>
+        <h5 class="modal-title">Escanear Producto</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopScanner()"></button>
       </div>
-      <div class="modal-body p-0 bg-dark position-relative text-center">
+      <div class="modal-body p-0 bg-dark position-relative">
         
-        <div id="reader"></div>
+        <div id="interactive" class="viewport"></div>
 
-        <div class="position-absolute bottom-0 start-0 w-100 p-3 text-white" style="background: rgba(0,0,0,0.8);">
-            <p class="mb-1 fw-bold text-warning" style="font-size: 1.1em;">⚠️ MANTÉN DISTANCIA</p>
-            <small>Si se ve borroso, <strong>aleja el móvil 20-30cm</strong> hasta que enfoque.</small>
+        <div class="position-absolute bottom-0 start-0 w-100 p-2 text-white bg-dark bg-opacity-75 text-center">
+            <small>Si ves líneas verdes, ¡estamos detectando!</small>
         </div>
       </div>
     </div>
@@ -50,66 +63,97 @@
 </div>
 
 <script>
-    let html5QrcodeScanner = null;
-
     function openScanner() {
         const myModal = new bootstrap.Modal(document.getElementById('scannerModal'));
         myModal.show();
         
         const modalElement = document.getElementById('scannerModal');
-        modalElement.addEventListener('shown.bs.modal', startCamera);
+        modalElement.addEventListener('shown.bs.modal', startQuagga);
         modalElement.addEventListener('hidden.bs.modal', stopScanner);
     }
 
-    function startCamera() {
-        if (html5QrcodeScanner === null) {
-            html5QrcodeScanner = new Html5Qrcode("reader");
-        }
-
-        const config = { 
-            fps: 20, // Escaneo rápido
-            // CAJA PEQUEÑA = EL USUARIO SE ALEJA = MEJOR ENFOQUE
-            qrbox: { width: 200, height: 100 }, 
-            aspectRatio: 1.0, 
-            formatsToSupport: [ 
-                Html5QrcodeSupportedFormats.EAN_13, 
-                Html5QrcodeSupportedFormats.EAN_8,
-                Html5QrcodeSupportedFormats.UPC_A
-            ]
-        };
-
-        // CONFIGURACIÓN MÍNIMA Y SEGURA PARA IOS
-        // No pedimos width/height para evitar el bloqueo de "OverconstrainedError"
-        const constraints = { facingMode: "environment" };
-
-        html5QrcodeScanner.start(
-            constraints, 
-            config, 
-            onScanSuccess,
-            (errorMessage) => { 
-                // Ignoramos errores de lectura cuadro a cuadro
+    function startQuagga() {
+        Quagga.init({
+            inputStream: {
+                name: "Live",
+                type: "LiveStream",
+                target: document.querySelector('#interactive'),
+                constraints: {
+                    facingMode: "environment", // Cámara trasera
+                    // En Quagga no necesitamos ser tan estrictos con resoluciones
+                    // dejamos que negocie la mejor automáticamente
+                }
+            },
+            // Configuramos solo lectores de códigos de barras (EAN)
+            decoder: {
+                readers: [
+                    "ean_reader", // EAN-13 (El estándar de Mercadona)
+                    "ean_8_reader" // Versión corta
+                ]
+            },
+            // Configuramos la localización (las líneas verdes)
+            locate: true 
+        }, function(err) {
+            if (err) {
+                console.log(err);
+                alert("Error al iniciar cámara: " + err);
+                return;
             }
-        ).catch(err => {
-            console.error("Error start", err);
-            alert("No se pudo iniciar la cámara. Asegúrate de estar en HTTPS y dar permisos.");
+            console.log("Quagga iniciado");
+            Quagga.start();
+        });
+
+        // Evento: Cuando detecta una posible línea (dibuja caja verde)
+        Quagga.onProcessed(function(result) {
+            var drawingCtx = Quagga.canvas.ctx.overlay,
+                drawingCanvas = Quagga.canvas.dom.overlay;
+
+            if (result) {
+                // Limpiamos el canvas frame a frame
+                if (result.boxes) {
+                    drawingCtx.clearRect(0, 0, parseInt(drawingCanvas.getAttribute("width")), parseInt(drawingCanvas.getAttribute("height")));
+                    result.boxes.filter(function (box) {
+                        return box !== result.box;
+                    }).forEach(function (box) {
+                        Quagga.ImageDebug.drawPath(box, {x: 0, y: 1}, drawingCtx, {color: "green", lineWidth: 2});
+                    });
+                }
+
+                if (result.box) {
+                    Quagga.ImageDebug.drawPath(result.box, {x: 0, y: 1}, drawingCtx, {color: "#00F", lineWidth: 2});
+                }
+
+                if (result.codeResult && result.codeResult.code) {
+                    Quagga.ImageDebug.drawPath(result.line, {x: 'x', y: 'y'}, drawingCtx, {color: 'red', lineWidth: 3});
+                }
+            }
+        });
+
+        // Evento: Cuando CONFIRMA la lectura del código
+        Quagga.onDetected(function(result) {
+            var code = result.codeResult.code;
+            console.log("Código detectado:", code);
+            
+            // Verificación simple: Mercadona usa EAN-13, deben ser números
+            if(code && code.length >= 8) {
+                stopScanner();
+                
+                // Cerrar modal
+                const modalEl = document.getElementById('scannerModal');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                modal.hide();
+
+                // Rellenar y enviar
+                document.getElementById('search-input').value = code;
+                document.getElementById('searchForm').submit();
+            }
         });
     }
 
     function stopScanner() {
-        if (html5QrcodeScanner && html5QrcodeScanner.isScanning) {
-            html5QrcodeScanner.stop().then(() => html5QrcodeScanner.clear());
-        }
-    }
-
-    function onScanSuccess(decodedText) {
-        stopScanner();
-        // Cerrar modal
-        const modalEl = document.getElementById('scannerModal');
-        const modal = bootstrap.Modal.getInstance(modalEl);
-        modal.hide();
-
-        // Rellenar y enviar
-        document.getElementById('search-input').value = decodedText;
-        document.getElementById('searchForm').submit();
+        Quagga.stop();
+        // Limpiar el canvas manualmente para que no se quede la última imagen congelada
+        const container = document.querySelector('#interactive');
+        if(container) container.innerHTML = ""; 
     }
 </script>

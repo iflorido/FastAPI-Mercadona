@@ -1,54 +1,47 @@
 <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-<div class="d-flex flex-column flex-md-row gap-2 align-items-center w-100">
+
 <style>
+/* Ajuste para que el video no se deforme en iOS */
+#reader {
+    width: 100%;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+}
 #reader video {
-    max-height: 60vh !important; /* Ocupa máximo el 60% de la altura de la pantalla */
     object-fit: cover;
     border-radius: 8px;
+    /* En iOS es importante limitar la altura para que no ocupe toda la pantalla */
+    max-height: 50vh !important; 
 }
-</style>  
+</style>
+
+<div class="d-flex flex-column flex-md-row gap-2 align-items-center w-100">
     <form action="{{ url_for('search_products') }}" method="get" class="flex-grow-1 w-100" id="searchForm">
         <div class="input-group">
-            <span class="input-group-text bg-white text-muted border-end-0">
-                <i class="bi bi-search"></i> 
-            </span>
-            
-            <input type="search" 
-                   id="search-input"
-                   name="query" 
-                   class="form-control border-start-0 ps-0 border-end-0" 
-                   placeholder="Buscar producto, marca o EAN..." 
-                   aria-label="Buscar" 
-                   required>
-            
-            <button class="btn btn-outline-secondary border-start-0 border-end-0" type="button" onclick="openScanner()" title="Escanear código de barras">
-                <i class="bi bi-upc-scan"></i>
-            </button>
-            
+            <span class="input-group-text bg-white text-muted border-end-0"><i class="bi bi-search"></i></span>
+            <input type="search" id="search-input" name="query" class="form-control border-start-0 ps-0 border-end-0" placeholder="Buscar producto, marca o EAN..." aria-label="Buscar" required>
+            <button class="btn btn-outline-secondary border-start-0 border-end-0" type="button" onclick="openScanner()" title="Escanear"><i class="bi bi-upc-scan"></i></button>
             <button class="btn btn-success" type="submit">Buscar</button>
         </div>
     </form>
-
     {% if request.url.path != '/' %}
-        <a href="/" class="btn btn-outline-secondary text-nowrap">
-            <i class="bi bi-house-door-fill"></i> Inicio
-        </a>
+        <a href="/" class="btn btn-outline-secondary text-nowrap"><i class="bi bi-house-door-fill"></i> Inicio</a>
     {% endif %}
-    
 </div>
 
 <div class="modal fade" id="scannerModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header bg-success text-white">
-        <h5 class="modal-title"><i class="bi bi-upc-scan"></i> Escanear Producto</h5>
+        <h5 class="modal-title"><i class="bi bi-upc-scan"></i> Escanear</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="stopScanner()"></button>
       </div>
       <div class="modal-body text-center p-0 bg-dark position-relative">
-        <div id="reader" style="width: 100%;"></div>
-        
-        <div class="position-absolute bottom-0 start-0 w-100 p-2 text-white bg-dark bg-opacity-75">
-            <small>Centra el código de barras en el rectángulo rojo</small>
+        <div id="reader"></div>
+        <div class="position-absolute bottom-0 start-0 w-100 p-3 text-white bg-dark bg-opacity-75">
+            <p class="mb-1 fw-bold text-warning"><i class="bi bi-exclamation-triangle"></i> ¡No te acerques mucho!</p>
+            <small>Si se ve borroso, aleja el móvil unos 20cm.</small>
         </div>
       </div>
     </div>
@@ -61,10 +54,7 @@
     function openScanner() {
         const myModal = new bootstrap.Modal(document.getElementById('scannerModal'));
         myModal.show();
-
         const modalElement = document.getElementById('scannerModal');
-        
-        // Esperamos a que el modal termine de abrirse completamente
         modalElement.addEventListener('shown.bs.modal', startCamera);
         modalElement.addEventListener('hidden.bs.modal', stopScanner);
     }
@@ -74,73 +64,58 @@
             html5QrcodeScanner = new Html5Qrcode("reader");
         }
 
-        // 1. CONFIGURACIÓN DEL PROCESAMIENTO (Software)
         const config = { 
-            fps: 10,
-            // Caja dinámica: crucial para que iOS no haga zoom extraño
+            fps: 15, // Más FPS ayuda a capturar el momento nítido
             qrbox: function(viewfinderWidth, viewfinderHeight) {
-                const minEdgePercentage = 0.85; 
+                // Caja rectangular más pequeña para obligar al usuario a centrar bien
+                const minEdgePercentage = 0.8; 
                 const qrboxWidth = Math.floor(viewfinderWidth * minEdgePercentage);
-                const qrboxHeight = Math.floor(qrboxWidth * 0.5); // Rectangular para código de barras
-                return {
-                    width: qrboxWidth,
-                    height: qrboxHeight
-                };
+                return { width: qrboxWidth, height: Math.floor(qrboxWidth * 0.4) };
             },
-            // Solo buscamos estos formatos
             formatsToSupport: [ 
                 Html5QrcodeSupportedFormats.EAN_13, 
                 Html5QrcodeSupportedFormats.EAN_8,
                 Html5QrcodeSupportedFormats.UPC_A
             ],
-            // Desactivamos esto temporalmente por si causa conflicto en iOS
+            // En iOS esto a veces falla, mejor false para usar el decodificador por software robusto
             useBarCodeDetectorIfSupported: false 
         };
 
-        // 2. CONFIGURACIÓN DE LA CÁMARA (Hardware)
-        // Para iOS: MENOS ES MÁS. Solo pedimos la cámara trasera.
-        // Si añadimos width/height/focusMode, iOS suele bloquearse.
-        const cameraIdOrConfig = { facingMode: "environment" };
+        // ESTRATEGIA IOS: Pedir Alta Resolución (HD)
+        // Esto permite leer códigos estando más lejos (donde la cámara sí enfoca)
+        const constraints = { 
+            facingMode: "environment",
+            width: { min: 640, ideal: 1280, max: 1920 },
+            height: { min: 480, ideal: 720, max: 1080 }
+        };
 
         html5QrcodeScanner.start(
-            cameraIdOrConfig, 
+            constraints, 
             config, 
-            onScanSuccess, 
-            onScanFailure
+            onScanSuccess
         ).catch(err => {
-            console.error("Error crítico al iniciar cámara:", err);
-            // Intento desesperado: Si falla la trasera, intenta "cualquier cámara"
-            // Esto a veces revive a iOS si está bloqueado con "environment"
-            html5QrcodeScanner.start(
-                { facingMode: { exact: "environment" } }, 
-                config, 
-                onScanSuccess
-            ).catch(err2 => {
-                 alert("No se pudo abrir la cámara. En iOS comprueba: Ajustes > Safari > Cámara > Permitir. Error: " + err2);
-            });
+            console.warn("Fallo configuración HD, intentando básica...", err);
+            // Fallback si el móvil no soporta HD
+            html5QrcodeScanner.start({ facingMode: "environment" }, config, onScanSuccess)
+            .catch(err2 => alert("Error cámara: " + err2));
         });
     }
 
     function stopScanner() {
         if (html5QrcodeScanner && html5QrcodeScanner.isScanning) {
-            html5QrcodeScanner.stop().then(() => {
-                html5QrcodeScanner.clear();
-            }).catch(err => console.log("Error al detener", err));
+            html5QrcodeScanner.stop().then(() => html5QrcodeScanner.clear());
         }
     }
 
-    function onScanSuccess(decodedText, decodedResult) {
+    function onScanSuccess(decodedText) {
         stopScanner();
-        
         const modalEl = document.getElementById('scannerModal');
-        const modal = bootstrap.Modal.getInstance(modalEl);
-        modal.hide();
+        bootstrap.Modal.getInstance(modalEl).hide();
+        
+        // Efecto visual/vibración si el navegador lo soporta
+        if (navigator.vibrate) navigator.vibrate(200);
 
         document.getElementById('search-input').value = decodedText;
         document.getElementById('searchForm').submit();
-    }
-
-    function onScanFailure(error) {
-        // Ignorar fallos de lectura frame a frame
     }
 </script>

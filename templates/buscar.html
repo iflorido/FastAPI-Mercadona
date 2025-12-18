@@ -1,25 +1,119 @@
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
 <div class="d-flex flex-column flex-md-row gap-2 align-items-center w-100">
     
-    <form action="{{ url_for('search_products') }}" method="get" class="flex-grow-1 w-100">
+    <form action="{{ url_for('search_products') }}" method="get" class="flex-grow-1 w-100" id="searchForm">
         <div class="input-group">
             <span class="input-group-text bg-white text-muted border-end-0">
-                <i class="bi bi-search"></i> </span>
+                <i class="bi bi-search"></i> 
+            </span>
             
             <input type="search" 
+                   id="search-input"
                    name="query" 
-                   class="form-control border-start-0 ps-0" 
+                   class="form-control border-start-0 ps-0 border-end-0" 
                    placeholder="Buscar producto, marca o EAN..." 
                    aria-label="Buscar" 
                    required>
+            
+            <button class="btn btn-outline-secondary border-start-0 border-end-0" type="button" onclick="openScanner()">
+                <i class="bi bi-upc-scan"></i>
+            </button>
             
             <button class="btn btn-success" type="submit">Buscar</button>
         </div>
     </form>
 
-{% if request.url.path != '/' %}
-    <a href="/" class="btn btn-outline-secondary text-nowrap">
-        <i class="bi bi-house-door-fill"></i> Inicio
-    </a>
-{% endif %}
+    {% if request.url.path != '/' %}
+        <a href="/" class="btn btn-outline-secondary text-nowrap">
+            <i class="bi bi-house-door-fill"></i> Inicio
+        </a>
+    {% endif %}
     
 </div>
+
+<div class="modal fade" id="scannerModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title"><i class="bi bi-upc-scan"></i> Escanear Código de Barras</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="stopScanner()"></button>
+      </div>
+      <div class="modal-body text-center p-0">
+        <div id="reader" style="width: 100%; min-height: 300px;"></div>
+        <p class="text-muted mt-2 small p-2">Apunta al código de barras del producto</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+    let html5QrcodeScanner = null;
+
+    function openScanner() {
+        // 1. Abrir el modal de Bootstrap
+        const myModal = new bootstrap.Modal(document.getElementById('scannerModal'));
+        myModal.show();
+
+        // 2. Iniciar el escáner cuando el modal esté visible
+        const modalElement = document.getElementById('scannerModal');
+        modalElement.addEventListener('shown.bs.modal', startCamera);
+        
+        // Detener cámara si cierran el modal clicando fuera
+        modalElement.addEventListener('hidden.bs.modal', stopScanner);
+    }
+
+    function startCamera() {
+        if (html5QrcodeScanner === null) {
+            html5QrcodeScanner = new Html5Qrcode("reader");
+        }
+
+        const config = { 
+            fps: 10, 
+            qrbox: { width: 250, height: 150 }, // Caja rectangular para códigos de barras
+            aspectRatio: 1.0
+        };
+
+        // Preferir cámara trasera
+        html5QrcodeScanner.start(
+            { facingMode: "environment" }, 
+            config, 
+            onScanSuccess, 
+            onScanFailure
+        ).catch(err => {
+            console.error("Error al iniciar cámara", err);
+            alert("No se pudo iniciar la cámara. Asegúrate de dar permisos.");
+        });
+    }
+
+    function stopScanner() {
+        if (html5QrcodeScanner) {
+            html5QrcodeScanner.stop().then(() => {
+                html5QrcodeScanner.clear();
+            }).catch(err => console.log("Error al detener", err));
+        }
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+        // 1. Detener escáner
+        stopScanner();
+        
+        // 2. Cerrar modal
+        const modalEl = document.getElementById('scannerModal');
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        modal.hide();
+
+        // 3. Poner el código en el input y enviar formulario
+        document.getElementById('search-input').value = decodedText;
+        
+        // Pequeño delay para que el usuario vea que se ha escaneado
+        setTimeout(() => {
+            document.getElementById('searchForm').submit();
+        }, 300);
+    }
+
+    function onScanFailure(error) {
+        // El escaneo falla continuamente hasta que detecta algo, 
+        // no es necesario hacer nada aquí para no saturar la consola.
+    }
+</script>

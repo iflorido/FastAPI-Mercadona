@@ -16,7 +16,7 @@
                    aria-label="Buscar" 
                    required>
             
-            <button class="btn btn-outline-secondary border-start-0 border-end-0" type="button" onclick="openScanner()">
+            <button class="btn btn-outline-secondary border-start-0 border-end-0" type="button" onclick="openScanner()" title="Escanear código de barras">
                 <i class="bi bi-upc-scan"></i>
             </button>
             
@@ -36,12 +36,15 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header bg-success text-white">
-        <h5 class="modal-title"><i class="bi bi-upc-scan"></i> Escanear Código de Barras</h5>
+        <h5 class="modal-title"><i class="bi bi-upc-scan"></i> Escanear Producto</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" onclick="stopScanner()"></button>
       </div>
-      <div class="modal-body text-center p-0">
-        <div id="reader" style="width: 100%; min-height: 300px;"></div>
-        <p class="text-muted mt-2 small p-2">Apunta al código de barras del producto</p>
+      <div class="modal-body text-center p-0 bg-dark position-relative">
+        <div id="reader" style="width: 100%;"></div>
+        
+        <div class="position-absolute bottom-0 start-0 w-100 p-2 text-white bg-dark bg-opacity-75">
+            <small>Centra el código de barras en el rectángulo rojo</small>
+        </div>
       </div>
     </div>
   </div>
@@ -51,15 +54,16 @@
     let html5QrcodeScanner = null;
 
     function openScanner() {
-        // 1. Abrir el modal de Bootstrap
+        // 1. Abrir modal
         const myModal = new bootstrap.Modal(document.getElementById('scannerModal'));
         myModal.show();
 
-        // 2. Iniciar el escáner cuando el modal esté visible
         const modalElement = document.getElementById('scannerModal');
+        
+        // 2. Iniciar cámara solo cuando el modal ya se vea (evita errores de tamaño)
         modalElement.addEventListener('shown.bs.modal', startCamera);
         
-        // Detener cámara si cierran el modal clicando fuera
+        // 3. Detener cámara si cierran el modal
         modalElement.addEventListener('hidden.bs.modal', stopScanner);
     }
 
@@ -70,50 +74,60 @@
 
         const config = { 
             fps: 10, 
-            qrbox: { width: 250, height: 150 }, // Caja rectangular para códigos de barras
-            aspectRatio: 1.0
+            // Caja más ancha y baja, ideal para códigos de barras
+            qrbox: { width: 280, height: 100 }, 
+            aspectRatio: 1.0,
+            // IMPORTANTE: Definir qué formatos buscar
+            formatsToSupport: [ 
+                Html5QrcodeSupportedFormats.EAN_13, 
+                Html5QrcodeSupportedFormats.EAN_8,
+                Html5QrcodeSupportedFormats.CODE_128,
+                Html5QrcodeSupportedFormats.UPC_A
+            ],
+            // Activa detector nativo si el navegador lo soporta (más rápido en Android Chrome)
+            useBarCodeDetectorIfSupported: true 
         };
 
-        // Preferir cámara trasera
         html5QrcodeScanner.start(
-            { facingMode: "environment" }, 
+            { facingMode: "environment" }, // Cámara trasera
             config, 
             onScanSuccess, 
             onScanFailure
         ).catch(err => {
-            console.error("Error al iniciar cámara", err);
-            alert("No se pudo iniciar la cámara. Asegúrate de dar permisos.");
+            console.error("Error iniciando cámara", err);
+            alert("Error: " + err);
         });
     }
 
     function stopScanner() {
         if (html5QrcodeScanner) {
-            html5QrcodeScanner.stop().then(() => {
-                html5QrcodeScanner.clear();
-            }).catch(err => console.log("Error al detener", err));
+            // Verificamos si está escaneando antes de parar para evitar errores
+            if(html5QrcodeScanner.isScanning){
+                html5QrcodeScanner.stop().then(() => {
+                    html5QrcodeScanner.clear();
+                }).catch(err => console.log("Stop failed", err));
+            }
         }
     }
 
     function onScanSuccess(decodedText, decodedResult) {
-        // 1. Detener escáner
+        // Reproducir un pitido (opcional, da feedback)
+        // const audio = new Audio('beep.mp3'); audio.play();
+
         stopScanner();
         
-        // 2. Cerrar modal
+        // Cerrar modal
         const modalEl = document.getElementById('scannerModal');
         const modal = bootstrap.Modal.getInstance(modalEl);
         modal.hide();
 
-        // 3. Poner el código en el input y enviar formulario
+        // Rellenar input y buscar
+        console.log(`Código detectado: ${decodedText}`);
         document.getElementById('search-input').value = decodedText;
-        
-        // Pequeño delay para que el usuario vea que se ha escaneado
-        setTimeout(() => {
-            document.getElementById('searchForm').submit();
-        }, 300);
+        document.getElementById('searchForm').submit();
     }
 
     function onScanFailure(error) {
-        // El escaneo falla continuamente hasta que detecta algo, 
-        // no es necesario hacer nada aquí para no saturar la consola.
+        // No hacer nada, sigue intentando leer frames
     }
 </script>

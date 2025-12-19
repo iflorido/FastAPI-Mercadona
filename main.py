@@ -3,49 +3,45 @@ import asyncio
 from pathlib import Path
 import random
 import traceback
-from fastapi import FastAPI, Request, HTTPException, BackgroundTasks
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, ValidationError
-from typing import List, Optional
 import httpx
-import sys
-from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.sessions import SessionMiddleware
-from fastapi import Form
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware # para que funcione bien detrás de un proxy como Nginx con HTTPS.
-from fastapi import FastAPI, Response # para manejar respuestas personalizadas y crear sitemaps
 import unicodedata
 import re
+import uuid  # Importado una sola vez arriba
+from typing import List, Optional
+
+from fastapi import FastAPI, Request, HTTPException, BackgroundTasks, Form, Response
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-# --- Aquí vamos a definir los modelos para incluir los datos en el Sql ---
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+from pydantic import BaseModel
 
-
-# --- Definimos la variable para luego usar esta db ---
+# --- CONFIGURACIÓN ---
 DB_FILE = Path("mercadona.db")
+MERCADONA_API_URL = "https://tienda.mercadona.es/api/categories/"
 
-# Modelo para las subcategorias
+# --- MODELOS PYDANTIC (Esquemas de datos) ---
+
 class SubCategory(BaseModel):
     id: int
     name: str
-# Modelo para las categorias
+
 class MainCategory(BaseModel):
     id: int
     name: str
     categories: List[SubCategory]
 
-# Modelo para las respuestas de la API
 class ApiResponse(BaseModel):
     results: List[MainCategory]
-    
-# Modelo para los datos de precios de un producto
+
 class PriceInstructions(BaseModel):
     unit_price: Optional[str] = None
     bulk_price: Optional[str] = None
     unit_size: Optional[float] = None
     size_format: Optional[str] = None
 
-# Modelo para un producto 
 class Product(BaseModel):
     id: str
     display_name: str
@@ -53,36 +49,30 @@ class Product(BaseModel):
     price_instructions: PriceInstructions
     share_url: str
 
-# Modelo para las subcategorías que ahora contienen una lista de productos
 class SubCategoryWithProducts(BaseModel):
     id: int
     name: str
     products: Optional[List[Product]] = [] 
 
-# Modelo para las fotos del producto
 class Photo(BaseModel):
     regular: str
     
-# Modelo para los proveedores
 class Supplier(BaseModel):
     name: str
 
-# Modelo para el objeto anidado "details"
 class Details(BaseModel):
-    brand: Optional[str] = None # <-- CORRECCIÓN
+    brand: Optional[str] = None
     origin: Optional[str] = None
     suppliers: List[Supplier]
-    legal_name: Optional[str] = None # <-- CORRECCIÓN
+    legal_name: Optional[str] = None
     mandatory_mentions: Optional[str] = None
     description: Optional[str] = None
     storage_instructions: Optional[str] = None
     
-# Modelo para el objeto anidado "nutrition_information"
 class NutritionInformation(BaseModel):
     allergens: Optional[str] = None
     ingredients: Optional[str] = None
 
-# Modelo principal y completo para la página de un producto
 class ProductDetail(BaseModel):
     id: str
     ean: str
@@ -94,16 +84,14 @@ class ProductDetail(BaseModel):
     packaging: Optional[str] = None
     price_instructions: PriceInstructions
     nutrition_information: NutritionInformation
-    share_url: Optional[str] = None # <-- CORRECCIÓN
+    share_url: Optional[str] = None
 
-# Modelo principal para la respuesta de la API de una categoría específica
 class CategoryDetail(BaseModel):
     id: int
     name: str
-    # La respuesta contiene una lista de subcategorías con productos
     categories: List[SubCategoryWithProducts]
     
-# Modelo para la estructura inicial de categorías
+# Modelos simplificados para la fase 1 de sincronización
 class SubCategorySimple(BaseModel):
     id: int
     name: str
@@ -116,62 +104,102 @@ class MainCategorySimple(BaseModel):
 class ApiResponseSimple(BaseModel):
     results: List[MainCategorySimple]
 
-# --- Despues de definir todas las clases para la base de datos comenzamos con la aplicación FastAPI ---
+
+# --- INICIALIZACIÓN DE FASTAPI ---
 
 app = FastAPI()
+
+# 1. Archivos Estáticos (CSS, Imágenes, JS)
+# Esto permite usar url_for('static', path='...')
 app.mount("/static", StaticFiles(directory="static"), name="static")
-app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"]) # para que funcione bien detrás de un proxy como Nginx con HTTPS.
+
+# 2. Middlewares
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"]) 
 app.add_middleware(SessionMiddleware, secret_key="una_clave_muy_secreta_y_aleatoria")
 
-origins = [
-    "*" # Permite todas las fuentes, ideal para desarrollo.
-    # Cuando lancemos la app en producción, deberíamos restringir esto a dominios específicos.
-    # Añadieremos la url de donde lo alojaremos.
-    # "http://localhost",
-    # "http://localhost:8081",
-]
-
+# 3. CORS (Para permitir acceso desde tu App React Native)
+origins = ["*"] 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"], # Permite todos los métodos (GET, POST, etc.)
-    allow_headers=["*"], # Permite todas las cabeceras
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-# Definimos la carpeta 'templates'
+
+# 4. Templates (Jinja2)
 templates = Jinja2Templates(directory="templates")
-# Añadimos la función al entorno de Jinja para poder usarla en el HTML
-#Funcion para generar el sitemap dinámico
+
+# --- FUNCIONES AUXILIARES ---
 
 def slugify(text: str) -> str:
-    """
-    Convierte un texto en un slug amigable para URL.
-    Ej: "Café con Leche" -> "cafe-con-leche"
-    """
+    """Convierte texto a slug URL-friendly."""
     if not text:
         return ""
-    # Normaliza caracteres (quita tildes, ñ se vuelve n, etc.)
     text = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
-    # Convierte a minúsculas
     text = text.lower()
-    # Reemplaza todo lo que no sea letra o número por guiones
     text = re.sub(r'[^a-z0-9]+', '-', text)
-    # Elimina guiones al principio o final
     return text.strip('-')
-
-#Funcion para generar el sitemap dinámico
 
 templates.env.filters["slugify"] = slugify
 
-# De aquí vamos a sacar toda la información de API de Mercadona
-MERCADONA_API_URL = "https://tienda.mercadona.es/api/categories/"
+def parse_price(price_str):
+    """Convierte '2,50 €' a float 2.50"""
+    if not price_str:
+        return 0.0
+    try:
+        clean_str = price_str.replace('€', '').replace(',', '.').strip()
+        return float(clean_str)
+    except ValueError:
+        return 0.0
+
+def get_cart_data(request: Request):
+    """
+    Recupera carrito de sesión y lo enriquece con datos de DB.
+    Crucial para el Checkout y Success.
+    """
+    cart = request.session.get("cart", {})
+    cart_items = []
+    total_price = 0.0
+    
+    if not cart:
+        return [], 0.0
+
+    conn = sqlite3.connect(DB_FILE, timeout=10)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    try:
+        for product_id, quantity in cart.items():
+            cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
+            product = cursor.fetchone()
+            
+            if product:
+                price_float = parse_price(product["unit_price"])
+                subtotal = price_float * quantity
+                total_price += subtotal
+                
+                cart_items.append({
+                    "id": product["id"],
+                    "display_name": product["display_name"],
+                    "name": product["display_name"],
+                    "thumbnail": product["thumbnail"],
+                    "price": price_float, # Float para Analytics
+                    "unit_price": product["unit_price"], # String original para mostrar
+                    "quantity": quantity,
+                    "subtotal": f"{subtotal:.2f} €" # String formateado para vista
+                })
+    finally:
+        conn.close()
+
+    return cart_items, total_price
+
+# --- LÓGICA DE BASE DE DATOS Y SINCRONIZACIÓN ---
 
 def create_database_and_table():
-    """Crea la BD y la tabla de productos con la nueva columna EAN."""
     conn = sqlite3.connect(DB_FILE, timeout=10)
     conn.execute('PRAGMA journal_mode=WAL')
     cursor = conn.cursor()
-    
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS products (
         id TEXT PRIMARY KEY,
@@ -188,629 +216,343 @@ def create_database_and_table():
 async def sync_database():
     try:
         create_database_and_table() 
-        print("--- INICIANDO SINCRONIZACIÓN (Modo Seguro) ---", flush=True)
+        print("--- INICIANDO SINCRONIZACIÓN ---", flush=True)
         
-        # CAMBIO 1: User-Agent robusto y Semáforo más bajo (3 en vez de 5) para no agobiar al servidor
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
             'Accept-Language': 'es-ES,es;q=0.9',
         }
         semaphore = asyncio.Semaphore(3) 
 
-        # CAMBIO 2: Timeout general aumentado a 40 segundos
         async with httpx.AsyncClient(headers=headers, timeout=40.0) as client:
-            
-            # ==============================================================================
-            # --- FASE 1: OBTENER TODOS LOS IDS DE PRODUCTO ÚNICOS ---
-            # ==============================================================================
-            print("Fase 1: Descargando estructura de categorías...", flush=True)
-            
-            # 1. Obtener categorías principales
-            try:
-                response = await client.get("https://tienda.mercadona.es/api/categories/")
-                response.raise_for_status()
-                api_data = ApiResponseSimple(**response.json())
-            except Exception as e:
-                print(f"❌ Error fatal obteniendo categorías principales: {e}", flush=True)
-                return
+            # FASE 1: Estructura
+            print("Fase 1: Descargando estructura...", flush=True)
+            response = await client.get(MERCADONA_API_URL)
+            response.raise_for_status()
+            api_data = ApiResponseSimple(**response.json())
 
-            # 2. Extraer IDs de subcategorías
             all_subcategory_ids = [
                 sub_cat.id 
                 for main_cat in api_data.results 
                 for sub_cat in main_cat.categories
             ]
             
-            total_cats = len(all_subcategory_ids)
-            print(f"-> Se han encontrado {total_cats} subcategorías. Procesando...", flush=True)
-
-            progress = {"count": 0, "errors": 0}
-
-            async def fetch_product_list_from_category_with_progress(cat_id):
+            async def fetch_cat(cat_id):
                 async with semaphore:
-                    # CAMBIO 3: Pausa aleatoria más larga (0.3 a 1.0 segundos)
                     await asyncio.sleep(random.uniform(0.3, 1.0)) 
                     try:
                         res = await client.get(f"https://tienda.mercadona.es/api/categories/{cat_id}")
                         res.raise_for_status()
-                        
                         cat_data = CategoryDetail(**res.json())
                         products_in_cat = []
                         for sub in cat_data.categories:
                             if sub.products:
                                 products_in_cat.extend(sub.products)
                         return products_in_cat
-
-                    except Exception as e:
-                        # Si falla una categoría, no es crítico, seguimos
-                        # print(f"   [Warn] Categoría {cat_id} falló: {e}", flush=True)
+                    except Exception:
                         return []
-                    finally:
-                        progress["count"] += 1
-                        if progress["count"] % 20 == 0:
-                            print(f"   Fase 1: Procesadas {progress['count']}/{total_cats} categorías...", flush=True)
 
-            # Ejecutamos tareas Fase 1
-            tasks_f1 = [fetch_product_list_from_category_with_progress(cid) for cid in all_subcategory_ids]
+            tasks_f1 = [fetch_cat(cid) for cid in all_subcategory_ids]
             list_of_lists = await asyncio.gather(*tasks_f1)
-            
-            # Aplanar y limpiar
             all_products_stubs = [p for sublist in list_of_lists for p in sublist]
             unique_ids = list({p.id for p in all_products_stubs})
             
-            print(f"✔ Fase 1 Completada: {len(unique_ids)} productos únicos encontrados.", flush=True)
-            
-            # Pausa de seguridad entre fases para "enfriar" la conexión
-            print("⏳ Pausa de 5 segundos antes de iniciar la descarga masiva...", flush=True)
-            await asyncio.sleep(5)
+            print(f"✔ Fase 1: {len(unique_ids)} productos únicos.", flush=True)
+            await asyncio.sleep(2)
 
+            # FASE 2: Detalles
+            print(f"Fase 2: Obteniendo detalles...", flush=True)
             
-            # ==============================================================================
-            # --- FASE 2: OBTENER DETALLES (PARTE LENTA Y DELICADA) ---
-            # ==============================================================================
-            total_prods = len(unique_ids)
-            print(f"Fase 2: Obteniendo detalles de {total_prods} productos. Paciencia, esto tardará...", flush=True)
-            
-            progress["count"] = 0 
-            progress["errors"] = 0
-
-            async def fetch_details_with_progress(pid):
+            async def fetch_details(pid):
                 async with semaphore:
-                    # CAMBIO 4: Sleep considerablemente mayor (0.5 a 1.5s) para evitar bloqueos
                     await asyncio.sleep(random.uniform(0.5, 1.5))
-                    
                     try:
-                        # Petición individual
                         res = await client.get(f"https://tienda.mercadona.es/api/products/{pid}")
-                        
-                        if res.status_code == 404:
-                            return None # Producto descatalogado o no disponible
-                        
+                        if res.status_code == 404: return None
                         res.raise_for_status()
                         return ProductDetail(**res.json())
-
-                    except httpx.TimeoutException:
-                        progress["errors"] += 1
-                        print(f"   [TIMEOUT] El producto {pid} tardó demasiado.", flush=True)
-                        return None
                     except Exception as e:
-                        progress["errors"] += 1
-                        # Solo imprimimos errores ocasionales para no ensuciar la consola
-                        if progress["errors"] < 5 or progress["errors"] % 100 == 0:
-                            print(f"   [Error] Prod {pid}: {type(e).__name__} - {e}", flush=True)
+                        # print(f"Error {pid}: {e}")
                         return None
-                    
-                    finally:
-                        # CAMBIO 5: Lógica de conteo movida al 'finally'. SE EJECUTA SIEMPRE.
-                        progress["count"] += 1
-                        # Imprimimos cada 50 productos
-                        if progress["count"] % 50 == 0: 
-                            print(f"   Fase 2: Procesados {progress['count']}/{total_prods} (Errores acumulados: {progress['errors']})...", flush=True)
 
-            # Ejecutamos tareas Fase 2
-            tasks_f2 = [fetch_details_with_progress(pid) for pid in unique_ids]
+            tasks_f2 = [fetch_details(pid) for pid in unique_ids]
             detailed_products = await asyncio.gather(*tasks_f2)
-            
-            # Filtramos los nulos (errores o 404)
             valid_products = [p for p in detailed_products if p is not None]
 
-
-            # ==============================================================================
-            # --- FASE 3: GUARDAR EN SQLITE ---
-            # ==============================================================================
-            print(f"Fase 3: Guardando {len(valid_products)} registros válidos en base de datos...", flush=True)
-            
-            conn = sqlite3.connect(DB_FILE, timeout=60) # Timeout alto para escritura
+            # FASE 3: Guardar
+            print(f"Fase 3: Guardando en SQL...", flush=True)
+            conn = sqlite3.connect(DB_FILE, timeout=60)
             cursor = conn.cursor()
-            
             data_tuples = [
                 (p.id, p.ean, p.display_name, p.thumbnail, p.price_instructions.unit_price, p.share_url)
                 for p in valid_products
             ]
-            
             cursor.executemany("""
             INSERT OR REPLACE INTO products (id, ean, display_name, thumbnail, unit_price, share_url)
             VALUES (?, ?, ?, ?, ?, ?)
             """, data_tuples)
-            
             conn.commit()
             conn.close()
-            
-            print(f"✅ SINCRONIZACIÓN FINALIZADA. {len(valid_products)} productos listos para escanear.", flush=True)
-            if progress["errors"] > 0:
-                print(f"⚠️ Nota: Hubo {progress['errors']} productos que no se pudieron descargar (timeouts o errores).", flush=True)
+            print("✅ SINCRONIZACIÓN FINALIZADA.")
 
-    except Exception as e:
-        print("\n❌ ERROR CRÍTICO NO CONTROLADO:", flush=True)
+    except Exception:
         traceback.print_exc()
 
-
-# --- EVENTOS DE LA APLICACIÓN ---
+# --- EVENTOS STARTUP ---
 
 @app.on_event("startup")
 async def startup_event():
-    """Se ejecuta cuando la aplicación se inicia."""
     create_database_and_table()
-    if not DB_FILE.stat().st_size > 0: # Si la BD está vacía
-        await sync_database()
+    if not DB_FILE.exists() or DB_FILE.stat().st_size == 0:
+        # Ejecutamos la sincronización en segundo plano para no bloquear el arranque
+        asyncio.create_task(sync_database())
 
-@app.get("/actualizar-db")
-async def update_db_endpoint(background_tasks: BackgroundTasks):
-    """Inicia la actualización de la base de datos en segundo plano."""
-    background_tasks.add_task(sync_database)
-    return RedirectResponse(url="/", status_code=303)
+# --- ENDPOINTS WEB ---
 
-
-    
-# --- Comenzamos con ENDPOINTS - Aquí tendremos tanto los de la web como de la aplicación de React Navite---
-
-@app.get("/", response_class=HTMLResponse) # este sería el index
+@app.get("/", response_class=HTMLResponse)
 async def get_all_categories(request: Request): 
-    """
-    Este endpoint obtiene TODAS las categorías de la API de Mercadona
-    y las pasa a la plantilla index.html para que las muestre.
-    """
     try:
         cart = request.session.get("cart", {})
-        # Sumamos todos los valores (cantidades) del diccionario
         cart_count = sum(cart.values())
         
         async with httpx.AsyncClient() as client:
             response = await client.get(MERCADONA_API_URL)
             response.raise_for_status() 
-            
+        
         data = response.json()
         api_data = ApiResponse(**data)
         
-        if not api_data.results:
-            raise HTTPException(status_code=404, detail="No se encontraron categorías en la API.")
-            
-    
         return templates.TemplateResponse("index.html", {
             "request": request,
             "main_categories": api_data.results,
             "cart_count": cart_count
         })
-
-    except httpx.RequestError as exc:
-        raise HTTPException(status_code=500, detail=f"Error al contactar la API de Mercadona: {exc}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ocurrió un error inesperado: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/v1/categories") # este sería el index pero de la API para REACT NATIVE
-async def get_json_categories():
-    """
-    Este endpoint está dedicado a la app móvil.
-    Devuelve la lista de categorías en formato JSON puro.
-    """
+@app.get("/categories/{category_path}", response_class=HTMLResponse)
+async def read_category(request: Request, category_path: str):
     try:
-        url = "https://tienda.mercadona.es/api/categories/"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'}
-        
-        async with httpx.AsyncClient(headers=headers) as client:
-            response = await client.get(url)
-            response.raise_for_status() # Lanza un error si la respuesta no es 200 OK, asi podemos manejarlo con HTTPException
-            
-        # Pasamos el diccionario en una respuesta JSON para que la app lo reconozca correctamente
-        return response.json()
-
-    except httpx.RequestError as exc:
-        raise HTTPException(status_code=500, detail=f"Error al contactar la API externa: {exc}")
+        category_id = int(category_path.split('-')[0])
+    except ValueError:
+        raise HTTPException(status_code=404, detail="ID inválido")
     
-
-@app.get("/api/v1/products/{product_id}")
-async def get_product_details(product_id: str):
-    """
-    Devuelve los detalles completos de un producto específico.
-    """
-    try:
-        url = f"https://tienda.mercadona.es/api/products/{product_id}"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'}
-        
-        async with httpx.AsyncClient(headers=headers) as client:
-            response = await client.get(url)
-            if response.status_code == 404:
-                raise HTTPException(status_code=404, detail=f"Producto con ID {product_id} no encontrado.")
-            response.raise_for_status()
-            
-        return response.json()
-
-    except httpx.RequestError as exc:
-        raise HTTPException(status_code=500, detail=f"Error al contactar la API externa: {exc}")
+    cart = request.session.get("cart", {})
+    cart_count = sum(cart.values())
     
-
-@app.get("/api/v1/categories/{category_id}")
-async def get_category_products(category_id: int):
-    """
-    Este endpoint devuelve los detalles y productos de una categoría específica.
-    """
     try:
-        url = f"https://tienda.mercadona.es/api/categories/{category_id}"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'}
-        
-        async with httpx.AsyncClient(headers=headers) as client:
-            response = await client.get(url)
-            # Si una categoría no existe, Mercadona devuelve un 404
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"https://tienda.mercadona.es/api/categories/{category_id}")
             if response.status_code == 404:
-                raise HTTPException(status_code=404, detail=f"Categoría con ID {category_id} no encontrada.")
-            response.raise_for_status()
+                raise HTTPException(status_code=404, detail="Categoría no encontrada")
             
-        return response.json()
+            data = response.json()
+            category_data = CategoryDetail(**data)
+            
+            return templates.TemplateResponse("categoria.html", {
+                "request": request,
+                "category": category_data,
+                "cart_count": cart_count
+            })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    except httpx.RequestError as exc:
-        raise HTTPException(status_code=500, detail=f"Error al contactar la API externa: {exc}")
+@app.get("/products/{product_path}", response_class=HTMLResponse)
+async def read_product(request: Request, product_path: str):
+    product_id = product_path.split('-')[0]
+    cart = request.session.get("cart", {})
+    cart_count = sum(cart.values())
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"https://tienda.mercadona.es/api/products/{product_id}")
+            if response.status_code == 404:
+                raise HTTPException(status_code=404, detail="Producto no encontrado")
+            
+            data = response.json()
+            product_data = ProductDetail(**data)
+            
+            return templates.TemplateResponse("productos.html", {
+                "request": request,
+                "product": product_data,
+                "cart_count": cart_count
+            })
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/buscar", response_class=HTMLResponse)
 async def search_products(request: Request, query: str):
-    """
-    Busca productos en la BD por palabras individuales en el nombre, o por EAN/ID exacto,
-    y devuelve una página HTML con los resultados.
-    """
     cart = request.session.get("cart", {})
     cart_count = sum(cart.values())
     
     conn = sqlite3.connect(DB_FILE, timeout=10)
-    conn.execute('PRAGMA journal_mode=WAL')
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # Aqui hacemos la lógica de búsqueda y añadimos para que pueda buscar si pones varias palabras y tambíen por ean o id
     search_words = query.strip().split()
     results = []
 
-    # Solo ejecuta la consulta si el usuario ha escrito algo
     if search_words:
-        # 1. Crea una condición "LIKE ?" por cada palabra de búsqueda
         name_conditions = " AND ".join(["display_name LIKE ?"] * len(search_words))
-        
-        # 2. Prepara los parámetros para cada palabra, añadiendo los comodines '%'
-        #    Ejemplo: si la búsqueda es "Café Forte", esto será ['%café%', '%forte%']
         name_params = [f"%{word}%" for word in search_words]
         
-        # 3. Construye la consulta final, combinando la búsqueda por nombre con la de EAN/ID
         sql_query = f"""
         SELECT * FROM products 
         WHERE ({name_conditions}) OR ean = ? OR id = ?
         """
-        # 4. Combina todos los parámetros en el orden correcto
         params = name_params + [query, query]
         
         cursor.execute(sql_query, params)
         results = cursor.fetchall()
     
     conn.close()
-    
 
-    # Devuelve la plantilla HTML con los resultados
     return templates.TemplateResponse("resultados.html", {
         "request": request,
         "query": query,
         "results": results,
-        "cart_count": cart_count # Pasamos el conteo del carrito.
+        "cart_count": cart_count
     })
 
-
-
-@app.get("/sitemap.xml", include_in_schema=False)
-async def sitemap(request: Request):
-    """
-    Genera un sitemap dinámico combinando:
-    1. Páginas estáticas (inicio, buscar).
-    2. Categorías (consultadas a la API de Mercadona).
-    3. Productos (consultados a la BD local).
-    """
-    # Obtenemos la URL base (ej: http://localhost:8000 o tu dominio real)
-    base_url = str(request.base_url).rstrip("/")
-    urls = []
-
-    # --- 1. Páginas Estáticas ---
-    urls.append(f"{base_url}/")
-    urls.append(f"{base_url}/buscar")
-
-    # --- 2. Categorías (Desde la API externa) ---
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(MERCADONA_API_URL, timeout=5.0)
-            if response.status_code == 200:
-                data = response.json()
-                
-                for category in data.get("results", []):
-                    # Generamos el slug para la categoría principal
-                    cat_id = category['id']
-                    cat_name = category['name']
-                    cat_slug = slugify(cat_name)
-                    
-                    # URL AMIGABLE: ID-NOMBRE
-                    urls.append(f"{base_url}/categories/{cat_id}-{cat_slug}")
-                    
-                    # Opcional: Subcategorías
-                    for subcat in category.get("categories", []):
-                         sub_id = subcat['id']
-                         sub_name = subcat['name']
-                         sub_slug = slugify(sub_name)
-                         
-                         urls.append(f"{base_url}/categories/{sub_id}-{sub_slug}")
-
-    except Exception as e:
-        print(f"Error obteniendo categorías para sitemap: {e}")
-
-    # --- 3. Productos (Desde tu SQLite Local) ---
-    # Es mucho más rápido leer los productos de tu BD local que de la API
-    # --- 3. Productos (Desde tu SQLite Local) ---
-    try:
-        conn = sqlite3.connect(DB_FILE, timeout=5)
-        cursor = conn.cursor()
-        # AHORA PEDIMOS TAMBIÉN EL NOMBRE
-        cursor.execute("SELECT id, display_name FROM products")
-        products = cursor.fetchall()
-        conn.close()
-
-        for prod in products:
-            pid = prod[0]
-            name = prod[1]
-            
-            # Generamos el slug
-            slug = slugify(name)
-            
-            # La URL ahora es ID-SLUG (Ej: 12345-pan-de-molde)
-            urls.append(f"{base_url}/products/{pid}-{slug}")
-            
-    except Exception as e:
-        print(f"Error obteniendo productos localmente: {e}")
-
-    # --- 4. Construcción del XML ---
-    xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n'
-    xml_content += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-    
-    for url in urls:
-        xml_content += f'  <url>\n    <loc>{url}</loc>\n    <changefreq>daily</changefreq>\n  </url>\n'
-        
-    xml_content += '</urlset>'
-
-    return Response(content=xml_content, media_type="application/xml")
-
-# --- ENDPOINTS PARA ACTUALIZAR LA BASE DE DATOS MANUALMENTE, esto lo vamos a ocultar cuando este en producción
-# para que no se pueda pulsar cuando se accede, en una siguiente versión añadiremos un acceso privado para esto ---
-@app.get("/actualizar-db")
-async def update_db_endpoint():
-    """Endpoint para disparar la actualización manual de la base de datos."""
-    await sync_database()
-    # Cuando le damos a actualizar, redirigimos al index 
-    return RedirectResponse(url="/", status_code=303)
-
-
-@app.get("/categories/{category_path}", response_class=HTMLResponse)
-async def read_category(request: Request, category_path: str):
-    """
-    Obtiene los detalles de una categoría específica (incluyendo sus productos)
-    desde la API de Mercadona y los muestra.
-    """
-    # 1. Extraemos el ID numérico (lo que hay antes del primer guion)
-    try:
-        category_id = int(category_path.split('-')[0])
-    except ValueError:
-        raise HTTPException(status_code=404, detail="ID de categoría inválido")
-    
-    cart = request.session.get("cart", {})
-    cart_count = sum(cart.values())
-    # Construimos la URL dinámicamente con el ID de la categoría
-    category_url = f"https://tienda.mercadona.es/api/categories/{category_id}"
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(category_url)
-            # Maneja el caso de que una categoría no exista (ej: 404)
-            if response.status_code == 404:
-                raise HTTPException(status_code=404, detail=f"Categoría con ID {category_id} no encontrada.")
-            response.raise_for_status()
-            
-        data = response.json()
-        
-        # Usamos el nuevo modelo para validar y estructurar los datos
-        category_data = CategoryDetail(**data)
-        
-        # Pasamos los datos completos de la categoría a la plantilla
-        return templates.TemplateResponse("categoria.html", {
-            "request": request,
-            "category": category_data,
-            "cart_count": cart_count # Pasamos el conteo del carrito.
-        })
-
-    except httpx.RequestError as exc:
-        raise HTTPException(status_code=500, detail=f"Error al contactar la API de Mercadona: {exc}")
-    except Exception as e:
-        
-        raise HTTPException(status_code=500, detail=f"Error al procesar los datos: {e}")
-
-
-
-@app.get("/products/{product_path}", response_class=HTMLResponse)
-async def read_product(request: Request, product_path: str):
-    """
-    Obtiene los detalles completos de un producto específico desde la API
-    y los renderiza en la plantilla productos.html.
-    """
-    # Truco: Tomamos todo lo que haya antes del primer guion '-'
-    # Si la URL es "12345-leche", el id es "12345".
-    # Si la URL es "12345", el id es "12345".
-    product_id = product_path.split('-')[0]
-    
-    cart = request.session.get("cart", {})
-    cart_count = sum(cart.values())
-    
-    product_url = f"https://tienda.mercadona.es/api/products/{product_id}"
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(product_url)
-            if response.status_code == 404:
-                raise HTTPException(status_code=404, detail=f"Producto con ID {product_id} no encontrado.")
-            response.raise_for_status()
-            
-        data = response.json()
-        
-      
-        product_data = ProductDetail(**data)
-        
-        return templates.TemplateResponse("productos.html", {
-            "request": request,
-            "product": product_data,
-            "cart_count": cart_count # Pasamos el conteo del carrito.
-        })
-
-    except httpx.RequestError as exc:
-        raise HTTPException(status_code=500, detail=f"Error al contactar la API de Mercadona: {exc}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error al procesar los datos del producto: {e}")
-    
-
-
-@app.get("/api/v1/buscar")
-async def search_products_api(query: str):
-    """
-    Busca productos en la BD por palabras individuales en el nombre, o por EAN/ID exacto.
-    Devuelve los resultados en formato JSON para la app móvil.
-    """
-    conn = sqlite3.connect(DB_FILE, timeout=10)
-    conn.execute('PRAGMA journal_mode=WAL')
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    # Este es el inicio de la lógica de búsqueda multi-palabra pero para REACT NATIVE
-    search_words = query.strip().split()
-    results = []
-
-    # Solo ejecuta la consulta si el usuario ha escrito algo
-    if search_words:
-        # 1. Crea una condición "LIKE ?" por cada palabra de búsqueda
-        name_conditions = " AND ".join(["display_name LIKE ?"] * len(search_words))
-        
-        # 2. Prepara los parámetros para cada palabra (ej: ['%Café%', '%Forte%'])
-        name_params = [f"%{word}%" for word in search_words]
-        
-        # 3. Construye la consulta final, combinando la búsqueda por nombre con la de EAN/ID
-        sql_query = f"""
-        SELECT * FROM products 
-        WHERE ({name_conditions}) OR ean = ? OR id = ?
-        """
-        # 4. Combina todos los parámetros en el orden correcto
-        params = name_params + [query, query]
-        
-        cursor.execute(sql_query, params)
-        results = cursor.fetchall()
-    
-    conn.close()
-    
-
-    # Devuelve los resultados directamente, los pasamos a JSON para que REACT lo entienda, resolvemos el error de serialización
-    return results
-
-
-# añadimos la parte del carrito
-
-def parse_price(price_str):
-    if not price_str:
-        return 0.0
-    try:
-        # Eliminamos el símbolo de euro, espacios y reemplazamos coma por punto
-        clean_str = price_str.replace('€', '').replace(',', '.').strip()
-        return float(clean_str)
-    except ValueError:
-        return 0.0
+# --- ENDPOINTS CARRITO & CHECKOUT ---
 
 @app.post("/cart/add")
 async def add_to_cart(request: Request, product_id: str = Form(...), quantity: int = Form(...)):
-    """Añade un producto al carrito (guardado en la sesión)."""
-    # Obtenemos el carrito actual de la sesión o creamos uno vacío
     cart = request.session.get("cart", {})
-    
-    # Si el producto ya está, sumamos la cantidad, si no, lo creamos
     if product_id in cart:
         cart[product_id] += quantity
     else:
         cart[product_id] = quantity
-    
-    # Guardamos el carrito actualizado en la sesión
     request.session["cart"] = cart
-    
-    # Redirigimos al usuario a la vista del carrito
     return RedirectResponse(url="/carrito", status_code=303)
 
 @app.post("/cart/update")
 async def update_cart(request: Request, product_id: str = Form(...), quantity: int = Form(...), action: str = Form(...)):
-    """Actualiza la cantidad o elimina un producto."""
     cart = request.session.get("cart", {})
-    
     if action == "delete":
-        if product_id in cart:
-            del cart[product_id]
+        if product_id in cart: del cart[product_id]
     elif action == "update":
         if product_id in cart:
-            if quantity > 0:
-                cart[product_id] = quantity
-            else:
-                del cart[product_id] # Si pone 0, lo borramos
+            if quantity > 0: cart[product_id] = quantity
+            else: del cart[product_id]
                 
     request.session["cart"] = cart
     return RedirectResponse(url="/carrito", status_code=303)
 
 @app.get("/carrito", response_class=HTMLResponse)
 async def view_cart(request: Request):
-    """Muestra los productos que hay en el carrito."""
-    cart = request.session.get("cart", {})
-    
-    cart_items = []
-    total_price = 0.0
-    
-    # Conectamos a la BD para recuperar los detalles (foto, nombre, precio) de los IDs guardados en sesión
-    conn = sqlite3.connect(DB_FILE, timeout=10)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    for product_id, quantity in cart.items():
-        cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
-        product = cursor.fetchone()
-        
-        if product:
-            price_float = parse_price(product["unit_price"])
-            subtotal = price_float * quantity
-            total_price += subtotal
-            
-            cart_items.append({
-                "id": product["id"],
-                "display_name": product["display_name"],
-                "thumbnail": product["thumbnail"],
-                "unit_price": product["unit_price"], # String original para mostrar
-                "quantity": quantity,
-                "subtotal": f"{subtotal:.2f} €" # Formateado
-            })
-            
-    conn.close()
-    
+    cart_items, total_price = get_cart_data(request)
     return templates.TemplateResponse("carrito.html", {
         "request": request,
         "cart_items": cart_items,
         "total_price": f"{total_price:.2f}"
     })
+    
+@app.get("/checkout", response_class=HTMLResponse)
+async def checkout_page(request: Request):
+    cart_items, total_price = get_cart_data(request)
+    if not cart_items:
+        return RedirectResponse(url="/", status_code=303)
 
+    return templates.TemplateResponse("checkout.html", {
+        "request": request,
+        "cart_items": cart_items,
+        "total": total_price 
+    })
+    
+@app.post("/success", response_class=HTMLResponse)
+async def success_page(request: Request):
+    cart_items, total_price = get_cart_data(request)
+    
+    if not cart_items:
+         return RedirectResponse(url="/", status_code=303)
 
+    transaction_id = str(uuid.uuid4()).split('-')[0].upper()
+    request.session.pop("cart", None) # Vaciar carrito
+    
+    return templates.TemplateResponse("success.html", {
+        "request": request,
+        "cart_items": cart_items,
+        "total": total_price,
+        "transaction_id": transaction_id,
+        "shipping": 5.99
+    })
+
+# --- ENDPOINTS API JSON (Para App Móvil) ---
+
+@app.get("/api/v1/categories")
+async def get_json_categories():
+    async with httpx.AsyncClient() as client:
+        response = await client.get(MERCADONA_API_URL)
+        return response.json()
+
+@app.get("/api/v1/products/{product_id}")
+async def get_product_details_json(product_id: str):
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"https://tienda.mercadona.es/api/products/{product_id}")
+        return response.json()
+
+@app.get("/api/v1/categories/{category_id}")
+async def get_category_products_json(category_id: int):
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"https://tienda.mercadona.es/api/categories/{category_id}")
+        return response.json()
+
+@app.get("/api/v1/buscar")
+async def search_products_api(query: str):
+    conn = sqlite3.connect(DB_FILE, timeout=10)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    search_words = query.strip().split()
+    results = []
+    if search_words:
+        name_conditions = " AND ".join(["display_name LIKE ?"] * len(search_words))
+        name_params = [f"%{word}%" for word in search_words]
+        sql_query = f"SELECT * FROM products WHERE ({name_conditions}) OR ean = ? OR id = ?"
+        params = name_params + [query, query]
+        cursor.execute(sql_query, params)
+        results = cursor.fetchall()
+    
+    conn.close()
+    return results
+
+# --- SITEMAP & TOOLS ---
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap(request: Request):
+    base_url = str(request.base_url).rstrip("/")
+    urls = [f"{base_url}/", f"{base_url}/buscar"]
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(MERCADONA_API_URL, timeout=5.0)
+            if response.status_code == 200:
+                for category in response.json().get("results", []):
+                    cat_slug = slugify(category['name'])
+                    urls.append(f"{base_url}/categories/{category['id']}-{cat_slug}")
+                    for subcat in category.get("categories", []):
+                         sub_slug = slugify(subcat['name'])
+                         urls.append(f"{base_url}/categories/{subcat['id']}-{sub_slug}")
+    except Exception: pass
+
+    try:
+        conn = sqlite3.connect(DB_FILE, timeout=5)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, display_name FROM products")
+        for pid, name in cursor.fetchall():
+            urls.append(f"{base_url}/products/{pid}-{slugify(name)}")
+        conn.close()
+    except Exception: pass
+
+    xml_content = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    for url in urls:
+        xml_content += f'  <url>\n    <loc>{url}</loc>\n    <changefreq>daily</changefreq>\n  </url>\n'
+    xml_content += '</urlset>'
+
+    return Response(content=xml_content, media_type="application/xml")
+
+@app.get("/actualizar-db")
+async def update_db_endpoint(background_tasks: BackgroundTasks):
+    background_tasks.add_task(sync_database)
+    return RedirectResponse(url="/", status_code=303)

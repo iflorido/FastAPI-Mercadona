@@ -2,9 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <title>{{ product.display_name }} | Comprar en Mercadona API</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title>{{ product.display_name }} | Comprar en Mercadona API</title>
     <meta name="description" content="Compra {{ product.display_name }} al mejor precio. {{ product.details.legal_name }}. Información nutricional y detalles.">
     
     <link rel="canonical" href="{{ request.base_url }}products/{{ product.id }}-{{ product.display_name | slugify }}">
@@ -50,7 +48,8 @@
             background-color: #f8f9fa;
             display: flex;             
             flex-direction: column;    
-            min-height: 100vh;}
+            min-height: 100vh;
+        }
 
         .image-container {
             background-color: white;
@@ -100,24 +99,14 @@
             box-shadow: none;
             border-color: rgba(0,84,50,0.25);
         }
-        .footer {
-            margin-top: auto;
-            background-color: #212529;
-            color: #adb5bd;
-            padding: 2rem 0;
-            font-size: 0.9rem;
-        }
-        .footer a {
-            color: #fff;
-            text-decoration: none;
-            transition: color 0.3s;
-        }
-        .footer a:hover {
-            color: #198754;
-        }
     </style>
+    
+    <script>
+        window.dataLayer = window.dataLayer || [];
+    </script>
+    
+    {% include "tag.html" %}
 </head>
- {% include "tag.html" %}
 <body>
 
     <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top mb-4">
@@ -149,7 +138,7 @@
 
         <div class="row g-5">
             <div class="col-lg-6">
-                <div class="image-container border">
+                <div class="image-container border bg-white">
                     {% if product.photos %}
                         <img src="{{ product.photos[0].regular }}" alt="Imagen de {{ product.display_name }}" class="product-img">
                     {% else %}
@@ -199,7 +188,8 @@
                         <label class="form-label fw-bold small">Cantidad</label>
                         <div class="input-group input-group-lg">
                             <input type="number" name="quantity" class="form-control text-center" value="1" min="1" max="50" style="max-width: 100px;">
-                            <button type="submit" class="btn btn-success flex-grow-1">
+                            
+                            <button type="submit" id="btn-add-cart" class="btn btn-success flex-grow-1">
                                 <i class="bi bi-cart-plus me-2"></i> Añadir al carrito
                             </button>
                         </div>
@@ -271,7 +261,49 @@
         </div>
 
     </div>
- {% include "footer.html" %}
+
+    {% include "footer.html" %}
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Datos del producto actual
+        const productData = {
+            item_id: "{{ product.id }}",
+            item_name: "{{ product.display_name }}",
+            price: {{ product.price_instructions.unit_price | replace(',', '.') }},
+            currency: "EUR",
+            item_brand: "{{ product.brand }}",
+            item_category: "Alimentación", 
+            quantity: 1
+        };
+    
+        // 1. Evento VIEW_ITEM (Al cargar la página)
+        window.dataLayer.push({ ecommerce: null });  // Limpiar buffer
+        window.dataLayer.push({
+            event: "view_item",
+            ecommerce: {
+                currency: "EUR",
+                value: productData.price,
+                items: [productData]
+            }
+        });
+    
+        // 2. Evento ADD_TO_CART (Al hacer clic en el botón)
+        const btnAdd = document.getElementById('btn-add-cart');
+        if (btnAdd) {
+            btnAdd.addEventListener('click', function() {
+                window.dataLayer.push({ ecommerce: null });
+                window.dataLayer.push({
+                    event: "add_to_cart",
+                    ecommerce: {
+                        currency: "EUR",
+                        value: productData.price,
+                        items: [productData]
+                    }
+                });
+            });
+        }
+    </script>
 </body>
 </html>

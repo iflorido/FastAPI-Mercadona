@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Tu Carrito de Compra | Mercadona API</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Oxygen:wght@300;400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        body { 
+            background-color: #f8f9fa; 
+            font-family: 'Oxygen', sans-serif; 
+            display: flex;             
+            flex-direction: column;    
+            min-height: 100vh;
+        }
+        
+        .cart-img { width: 80px; height: 80px; object-fit: contain; }
+        .total-box { background-color: #f8f9fa; padding: 20px; border-radius: 10px; }
+
+        /* Estilo enlaces */
+        .product-link {
+            text-decoration: none;
+            color: #212529; 
+            font-weight: 600;
+        }
+        .product-link:hover {
+            color: #198754; 
+            text-decoration: underline;
+        }
+
+        /* Ajustes Mobile */
+        @media (min-width: 768px) {
+            .container {
+                max-width: 96% !important;
+                padding-left: 6px !important;
+                padding-right: 6px !important;
+            }
+            .g-4, .gx-4 {
+                --bs-gutter-x: 0.8rem;
+            }
+        }
+    </style>
+    
+    <script>
+        window.dataLayer = window.dataLayer || [];
+    </script>
+    
+    {% include "tag.html" %}
+</head>
+<body>
+    <nav class="navbar navbar-light bg-light mb-4 shadow-sm">
+        <div class="container">
+            <a class="navbar-brand fw-bold text-success" href="/carrito">
+                <i class="bi bi-arrow-left"></i> Volver al Carrito
+            </a>
+            <span class="navbar-text fw-bold">🛒 Finalizar Compra</span>
+        </div>
+    </nav>
+
+    <div class="container py-4"> <div class="row g-5">
+            <div class="col-md-8">
+                <h4 class="mb-3 text-success">Dirección de envío</h4>
+                
+                <div class="alert alert-warning small d-flex align-items-center">
+                    <i class="bi bi-info-circle-fill me-2"></i>
+                    <div>
+                        <strong>Simulación:</strong> No uses datos reales. Proyecto Demo.
+                    </div>
+                </div>
+                
+                <form action="/success" method="post" class="needs-validation" id="checkout-form">
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <label for="firstName" class="form-label">Nombre</label>
+                            <input type="text" class="form-control" id="firstName" name="first_name" value="Ignacio" required>
+                        </div>
+
+                        <div class="col-sm-6">
+                            <label for="lastName" class="form-label">Apellidos</label>
+                            <input type="text" class="form-control" id="lastName" name="last_name" value="Florido" required>
+                        </div>
+
+                        <div class="col-12">
+                            <label for="address" class="form-label">Dirección</label>
+                            <input type="text" class="form-control" id="address" name="address" placeholder="Calle Falsa 123" required>
+                        </div>
+
+                        <div class="col-md-5">
+                            <label for="country" class="form-label">País</label>
+                            <select class="form-select" id="country" name="country" required>
+                                <option value="ES">España</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <h4 class="mb-3 text-success">Pago Seguro (Simulado)</h4>
+                    <div class="my-3">
+                        <div class="form-check">
+                            <input id="credit" name="paymentMethod" type="radio" class="form-check-input" checked required>
+                            <label class="form-check-label" for="credit">Tarjeta de Crédito</label>
+                        </div>
+                        <div class="form-check">
+                            <input id="bizum" name="paymentMethod" type="radio" class="form-check-input" required>
+                            <label class="form-check-label" for="bizum">Bizum</label>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <button class="w-100 btn btn-success btn-lg py-3 fw-bold" type="submit">
+                        PAGAR {{ "%.2f"|format(total) }}€
+                    </button>
+                </form>
+            </div>
+
+            <div class="col-md-4 order-md-last">
+                <h4 class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-success">Resumen</span>
+                    <span class="badge bg-success rounded-pill">{{ cart_items|length }}</span>
+                </h4>
+                <ul class="list-group mb-3 shadow-sm">
+                    {% for item in cart_items %}
+                    <li class="list-group-item d-flex justify-content-between lh-sm">
+                        <div>
+                            <h6 class="my-0">{{ item.name }}</h6>
+                            <small class="text-muted">Cant: {{ item.quantity }}</small>
+                        </div>
+                        <span class="text-muted">{{ "%.2f"|format(item.price * item.quantity) }}€</span>
+                    </li>
+                    {% endfor %}
+                    <li class="list-group-item d-flex justify-content-between bg-light">
+                        <span class="fw-bold text-success">TOTAL</span>
+                        <strong class="text-success">{{ "%.2f"|format(total) }}€</strong>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const checkoutItems = [
+            {% for item in cart_items %}
+            {
+                item_id: "{{ item.id }}",
+                item_name: "{{ item.name }}",
+                price: {{ item.price }}, // Asegúrate de que esto sea un número (float) sin comillas
+                quantity: {{ item.quantity }},
+                currency: "EUR"
+            },
+            {% endfor %}
+        ];
+
+        const checkoutTotal = {{ total }};
+
+        // Enviamos el evento al cargar la página de checkout
+        window.dataLayer.push({ ecommerce: null });
+        window.dataLayer.push({
+            event: "begin_checkout",
+            ecommerce: {
+                currency: "EUR",
+                value: checkoutTotal,
+                items: checkoutItems
+            }
+        });
+    </script>
+
+    {% include "footer.html" %}
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

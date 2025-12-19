@@ -97,10 +97,29 @@
                             <label for="lastName" class="form-label">Apellidos</label>
                             <input type="text" class="form-control" id="lastName" name="last_name" value="Florido" required>
                         </div>
-
+                        <div class="col-sm-6">
+                            <label for="email" class="form-label">Correo Electrónico</label>
+                            <input type="email" class="form-control" id="email" name="email" placeholder="ejemplo@dominio.com" required>
+                        </div>
+                        <div class="col-sm-6">
+                            <label for="phone" class="form-label">Teléfono</label>
+                            <input type="tel" class="form-control" id="phone" name="phone" placeholder="+34 600 000 000" required>
+                        </div>  
                         <div class="col-12">
                             <label for="address" class="form-label">Dirección</label>
                             <input type="text" class="form-control" id="address" name="address" placeholder="Calle Falsa 123" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="city" class="form-label">Ciudad</label>
+                            <input type="text" class="form-control" id="city" name="city" placeholder="Ciudad" required>
+                        </div>
+                        <div class="col-md-5">
+                            <label for="state" class="form-label">Provincia</label>
+                            <input type="text" class="form-control" id="state" name="state" placeholder="Provincia" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="zip" class="form-label">Código Postal</label>
+                            <input type="text" class="form-control" id="zip" name="zip" placeholder="00000" required>
                         </div>
 
                         <div class="col-md-5">
@@ -109,7 +128,18 @@
                                 <option value="ES">España</option>
                             </select>
                         </div>
-                    </div>
+                        <div class="col-md-5">
+                            <label for="shipping" class="form-label">Método de Envío</label>
+                            <select class="form-select" id="shipping" name="shipping" required>
+                                <option value="standard">Envío Estándar (3-5 días) - Gratis</option>
+                                <option value="express">Envío Exprés (1-2 días) - 5.00€</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label for="notas" class="form-label">Notas de envío</label>
+                            <textarea type="text" class="form-control" id="notas" name="notas" placeholder="Indique notas para su envío"></textarea>
+                        </div>
+                     </div>
 
                     <hr class="my-4">
 

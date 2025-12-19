@@ -147,9 +147,11 @@
                                     <form onsubmit="addToCartAjax(event, '{{ product.id }}', '{{ product.display_name }}', {{ product.price_instructions.unit_price | replace(',', '.') }}, '{{ product.brand }}')">
                                         <input type="hidden" name="product_id" value="{{ product.id }}">
                                         <input type="hidden" name="quantity" value="1">
+                                        <div class="d-grid gap-2 col-8 mx-auto">
                                         <button type="submit" class="btn btn-sm btn-success fw-bold">
                                             <i class="bi bi-cart-plus"></i> Añadir
                                         </button>
+                                        </div>
                                     </form>
                                 </div>
                             </div>

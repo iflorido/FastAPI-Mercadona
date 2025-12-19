@@ -2,35 +2,26 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title>{{ product.display_name }} | Comprar en Mercadona API</title>
-    <meta name="description" content="Compra {{ product.display_name }} al mejor precio. {{ product.details.legal_name }}. Información nutricional y detalles.">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ product.display_name }} | Comprar en Mercadona API</title>
+    <meta name="description" content="Compra {{ product.display_name }} al mejor precio. {{ product.details.legal_name }}.">
     
     <link rel="canonical" href="{{ request.base_url }}products/{{ product.id }}-{{ product.display_name | slugify }}">
-
+    
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Oxygen:wght@300;400;700&display=swap" rel="stylesheet">
-    
+
     <script type="application/ld+json">
     {
       "@context": "https://schema.org/",
       "@type": "Product",
       "name": "{{ product.display_name }}",
-      "image": [
-        "{{ product.thumbnail }}"
-        {% if product.photos %}, "{{ product.photos[0].regular }}"{% endif %}
-      ],
+      "image": ["{{ product.thumbnail }}"],
       "description": "{{ product.details.legal_name }}",
-      "brand": {
-        "@type": "Brand",
-        "name": "{{ product.brand or 'Hacendado' }}"
-      },
+      "brand": { "@type": "Brand", "name": "{{ product.brand or 'Hacendado' }}" },
       "offers": {
         "@type": "Offer",
-        "url": "{{ request.url }}",
         "priceCurrency": "EUR",
         "price": "{{ product.price_instructions.unit_price | replace(',', '.') | float }}",
         "availability": "https://schema.org/InStock"
@@ -39,87 +30,50 @@
     </script>
 
     <style>
-        html, body { 
-            height: 100%;
-            margin: 0;
-        }
+        html, body { height: 100%; margin: 0; }
         body { 
             font-family: 'Oxygen', sans-serif;
             background-color: #f8f9fa;
-            display: flex;             
-            flex-direction: column;    
-            min-height: 100vh;
+            display: flex; flex-direction: column; min-height: 100vh;
         }
 
         .image-container {
             background-color: white;
             border-radius: 12px;
             padding: 2rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: flex; align-items: center; justify-content: center;
             box-shadow: 0 4px 6px rgba(0,0,0,0.02);
-            height: 100%;
-            min-height: 400px;
+            height: 100%; min-height: 400px;
         }
         
         .product-img {
-            max-width: 100%;
-            max-height: 400px;
-            object-fit: contain;
-            transition: transform 0.3s ease;
+            max-width: 100%; max-height: 400px;
+            object-fit: contain; transition: transform 0.3s ease;
         }
-        
-        .product-img:hover {
-            transform: scale(1.05);
-        }
+        .product-img:hover { transform: scale(1.05); }
 
         .price-highlight {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: #d9534f;
+            font-size: 2.5rem; font-weight: 700; color: #d9534f;
         }
-
         .brand-badge {
-            background-color: #e9ecef;
-            color: #495057;
-            font-size: 0.9rem;
-            padding: 0.5em 1em;
-            border-radius: 50px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
+            background-color: #e9ecef; color: #495057; font-size: 0.9rem;
+            padding: 0.5em 1em; border-radius: 50px; font-weight: 700; text-transform: uppercase;
         }
-
+        
         .accordion-button:not(.collapsed) {
-            background-color: #f0fdf4;
-            color: #005432;
-        }
-        .accordion-button:focus {
-            box-shadow: none;
-            border-color: rgba(0,84,50,0.25);
+            background-color: #f0fdf4; color: #005432;
         }
         .footer {
-            margin-top: auto;
-            background-color: #212529;
-            color: #adb5bd;
-            padding: 2rem 0;
-            font-size: 0.9rem;
+            margin-top: auto; background-color: #212529; color: #adb5bd; padding: 2rem 0; font-size: 0.9rem;
         }
-        .footer a {
-            color: #fff;
-            text-decoration: none;
-            transition: color 0.3s;
-        }
-        .footer a:hover {
-            color: #198754;
-        }
+        .footer a { color: #fff; text-decoration: none; transition: color 0.3s; }
+        .footer a:hover { color: #198754; }
+
+        /* Estilo para Toast (Notificación) */
+        .toast-container { z-index: 1055; }
     </style>
     
-    <script>
-        window.dataLayer = window.dataLayer || [];
-    </script>
-    
+    <script>window.dataLayer = window.dataLayer || [];</script>
     {% include "tag.html" %}
 </head>
 <body>
@@ -133,11 +87,10 @@
             <div class="d-flex align-items-center">
                 <a href="/carrito" class="btn btn-outline-success position-relative me-2">
                     <i class="bi bi-cart3 fs-5"></i>
-                    {% if cart_count > 0 %}
-                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                    <span id="cart-badge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                          style="display: {% if cart_count > 0 %}inline-block{% else %}none{% endif %};">
                         {{ cart_count }}
                     </span>
-                    {% endif %}
                 </a>
             </div>
         </div>
@@ -197,12 +150,12 @@
 
                     <hr class="text-muted opacity-25">
 
-                    <form action="/cart/add" method="post">
+                    <form id="add-to-cart-form" onsubmit="addToCartAjax(event)">
                         <input type="hidden" name="product_id" value="{{ product.id }}">
                         
                         <label class="form-label fw-bold small">Cantidad</label>
                         <div class="input-group input-group-lg">
-                            <input type="number" name="quantity" class="form-control text-center" value="1" min="1" max="50" style="max-width: 100px;">
+                            <input type="number" id="product-quantity" name="quantity" class="form-control text-center" value="1" min="1" max="50" style="max-width: 100px;">
                             
                             <button type="submit" id="btn-add-cart" class="btn btn-success flex-grow-1">
                                 <i class="bi bi-cart-plus me-2"></i> Añadir al carrito
@@ -274,7 +227,17 @@
                  </div>
              </div>
         </div>
+    </div>
 
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="liveToast" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="bi bi-check-circle-fill me-2"></i> <span id="toast-message">Producto añadido al carrito.</span>
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
     </div>
 
     {% include "footer.html" %}
@@ -282,34 +245,93 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
-    // Datos del producto
-    const productItem = {
-        item_id: "{{ product.id }}",
-        item_name: "{{ product.display_name }}",
-        price: {{ product.price_instructions.unit_price | replace(',', '.') }},
-        currency: "EUR",
-        item_brand: "{{ product.brand }}",
-        quantity: 1
-    };
+        // Datos base del producto
+        const productBase = {
+            id: "{{ product.id }}",
+            name: "{{ product.display_name }}",
+            price: {{ product.price_instructions.unit_price | replace(',', '.') }},
+            brand: "{{ product.brand or 'Hacendado' }}",
+            category: "Alimentación"
+        };
 
-    // 1. Evento VIEW_ITEM (Usando sintaxis gtag)
-    gtag('event', 'view_item', {
-        currency: "EUR",
-        value: productItem.price,
-        items: [productItem]
-    });
-
-    // 2. Evento ADD_TO_CART
-    const btnAdd = document.getElementById('btn-add-cart');
-    if (btnAdd) {
-        btnAdd.addEventListener('click', function() {
-            gtag('event', 'add_to_cart', {
-                currency: "EUR",
-                value: productItem.price,
-                items: [productItem]
-            });
+        // 1. Evento VIEW_ITEM (Al cargar la página)
+        gtag('event', 'view_item', {
+            currency: "EUR",
+            value: productBase.price,
+            items: [{
+                item_id: productBase.id,
+                item_name: productBase.name,
+                item_brand: productBase.brand,
+                price: productBase.price,
+                quantity: 1
+            }]
         });
-    }
-</script>
+
+        // 2. Función AJAX para añadir al carrito
+        async function addToCartAjax(event) {
+            event.preventDefault(); // Evitar recarga
+            
+            const form = event.target;
+            const formData = new FormData(form);
+            const button = document.getElementById('btn-add-cart');
+            const originalText = button.innerHTML;
+            
+            // Obtener cantidad seleccionada
+            const quantityInput = document.getElementById('product-quantity');
+            const quantity = parseInt(quantityInput.value) || 1;
+
+            // Feedback visual en el botón
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Añadiendo...';
+
+            try {
+                // Enviar al servidor
+                const response = await fetch('/cart/add', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    // Actualizar Badge del carrito
+                    const badge = document.getElementById('cart-badge');
+                    let currentCount = parseInt(badge.innerText) || 0;
+                    currentCount += quantity; // Sumamos la cantidad seleccionada
+                    badge.innerText = currentCount;
+                    badge.style.display = 'inline-block';
+
+                    // Mostrar Toast con mensaje personalizado
+                    const toastMsg = document.getElementById('toast-message');
+                    toastMsg.innerText = `${quantity} unidad(es) añadida(s) al carrito.`;
+                    
+                    const toastEl = document.getElementById('liveToast');
+                    const toast = new bootstrap.Toast(toastEl);
+                    toast.show();
+
+                    // Disparar evento ADD_TO_CART de Analytics con la cantidad correcta
+                    if (typeof gtag === 'function') {
+                        gtag('event', 'add_to_cart', {
+                            currency: "EUR",
+                            value: productBase.price * quantity, // Valor total añadido
+                            items: [{
+                                item_id: productBase.id,
+                                item_name: productBase.name,
+                                item_brand: productBase.brand,
+                                price: productBase.price,
+                                quantity: quantity // Cantidad real
+                            }]
+                        });
+                    }
+                } else {
+                    alert("Error de conexión al añadir el producto.");
+                }
+            } catch (error) {
+                console.error("Error:", error);
+            } finally {
+                // Restaurar botón
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }
+        }
+    </script>
 </body>
 </html>

@@ -201,33 +201,30 @@
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
-    <script>
-        {% if cart_items %}
-        const cartItems = [
-            {% for item in cart_items %}
-            {
-                item_id: "{{ item.id }}",
-                item_name: "{{ item.name }}", // Asegúrate que Python pasa 'name'
-                price: {{ item.price }},       // Asegúrate que Python pasa float
-                quantity: {{ item.quantity }},
-                currency: "EUR"
-            },
-            {% endfor %}
-        ];
+<script>
+    {% if cart_items %}
+    const cartItems = [
+        {% for item in cart_items %}
+        {
+            item_id: "{{ item.id }}",
+            item_name: "{{ item.name }}",
+            price: {{ item.price }}, 
+            quantity: {{ item.quantity }},
+            currency: "EUR"
+        },
+        {% endfor %}
+    ];
 
-        // Recalculamos el total en JS para asegurar consistencia
-        const cartTotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+    // Calculamos total en JS para asegurar formato numérico
+    const cartTotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
 
-        window.dataLayer.push({ ecommerce: null });
-        window.dataLayer.push({
-            event: "view_cart",
-            ecommerce: {
-                currency: "EUR",
-                value: parseFloat(cartTotal.toFixed(2)),
-                items: cartItems
-            }
-        });
-        {% endif %}
-    </script>
+    // Evento VIEW_CART (Sintaxis gtag)
+    gtag('event', 'view_cart', {
+        currency: "EUR",
+        value: parseFloat(cartTotal.toFixed(2)),
+        items: cartItems
+    });
+    {% endif %}
+</script>
 </body>
 </html>

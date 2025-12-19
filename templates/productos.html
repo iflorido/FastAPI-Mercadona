@@ -282,43 +282,34 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
-        // Datos del producto actual
-        const productData = {
-            item_id: "{{ product.id }}",
-            item_name: "{{ product.display_name }}",
-            price: {{ product.price_instructions.unit_price | replace(',', '.') }},
-            currency: "EUR",
-            item_brand: "{{ product.brand }}",
-            item_category: "Alimentación", 
-            quantity: 1
-        };
-    
-        // 1. Evento VIEW_ITEM (Al cargar la página)
-        window.dataLayer.push({ ecommerce: null });  // Limpiar buffer
-        window.dataLayer.push({
-            event: "view_item",
-            ecommerce: {
+    // Datos del producto
+    const productItem = {
+        item_id: "{{ product.id }}",
+        item_name: "{{ product.display_name }}",
+        price: {{ product.price_instructions.unit_price | replace(',', '.') }},
+        currency: "EUR",
+        item_brand: "{{ product.brand }}",
+        quantity: 1
+    };
+
+    // 1. Evento VIEW_ITEM (Usando sintaxis gtag)
+    gtag('event', 'view_item', {
+        currency: "EUR",
+        value: productItem.price,
+        items: [productItem]
+    });
+
+    // 2. Evento ADD_TO_CART
+    const btnAdd = document.getElementById('btn-add-cart');
+    if (btnAdd) {
+        btnAdd.addEventListener('click', function() {
+            gtag('event', 'add_to_cart', {
                 currency: "EUR",
-                value: productData.price,
-                items: [productData]
-            }
-        });
-    
-        // 2. Evento ADD_TO_CART (Al hacer clic en el botón)
-        const btnAdd = document.getElementById('btn-add-cart');
-        if (btnAdd) {
-            btnAdd.addEventListener('click', function() {
-                window.dataLayer.push({ ecommerce: null });
-                window.dataLayer.push({
-                    event: "add_to_cart",
-                    ecommerce: {
-                        currency: "EUR",
-                        value: productData.price,
-                        items: [productData]
-                    }
-                });
+                value: productItem.price,
+                items: [productItem]
             });
-        }
-    </script>
+        });
+    }
+</script>
 </body>
 </html>

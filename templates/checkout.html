@@ -105,30 +105,30 @@
                             <label for="phone" class="form-label">Teléfono</label>
                             <input type="tel" class="form-control" id="phone" name="phone" placeholder="+34 600 000 000" required>
                         </div>  
-                        <div class="col-12">
+                        <div class="col-6">
                             <label for="address" class="form-label">Dirección</label>
                             <input type="text" class="form-control" id="address" name="address" placeholder="Calle Falsa 123" required>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label for="city" class="form-label">Ciudad</label>
                             <input type="text" class="form-control" id="city" name="city" placeholder="Ciudad" required>
                         </div>
-                        <div class="col-md-5">
+                        <div class="col-md-4">
                             <label for="state" class="form-label">Provincia</label>
                             <input type="text" class="form-control" id="state" name="state" placeholder="Provincia" required>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label for="zip" class="form-label">Código Postal</label>
                             <input type="text" class="form-control" id="zip" name="zip" placeholder="00000" required>
                         </div>
 
-                        <div class="col-md-5">
+                        <div class="col-md-4">
                             <label for="country" class="form-label">País</label>
                             <select class="form-select" id="country" name="country" required>
                                 <option value="ES">España</option>
                             </select>
                         </div>
-                        <div class="col-md-5">
+                        <div class="col-md-12">
                             <label for="shipping" class="form-label">Método de Envío</label>
                             <select class="form-select" id="shipping" name="shipping" required>
                                 <option value="standard">Envío Estándar (3-5 días) - Gratis</option>
@@ -137,7 +137,7 @@
                         </div>
                         <div class="col-12">
                             <label for="notas" class="form-label">Notas de envío</label>
-                            <textarea type="text" class="form-control" id="notas" name="notas" placeholder="Indique notas para su envío"></textarea>
+                            <textarea type="text" class="form-control" id="notas" name="notas" placeholder="Indique notas para su envío" rows="5"></textarea>
                         </div>
                      </div>
 
@@ -158,7 +158,8 @@
                     <hr class="my-4">
 
                     <button class="w-100 btn btn-success btn-lg py-3 fw-bold shadow-sm" type="button" onclick="startPaymentProcess()">
-                        PAGAR {{ "%.2f"|format(total) }}€ <i class="bi bi-credit-card-2-front ms-2"></i>
+                        PAGAR <span id="btn-total">{{ "%.2f"|format(total) }}€</span> 
+                        <i class="bi bi-credit-card-2-front ms-2"></i>
                     </button>
                 </form>
             </div>
@@ -178,9 +179,15 @@
                         <span class="text-muted">{{ "%.2f"|format(item.price * item.quantity) }}€</span>
                     </li>
                     {% endfor %}
+                    
+                    <li class="list-group-item d-flex justify-content-between bg-light small">
+                        <span class="text-muted">Gastos de envío</span>
+                        <span class="text-muted" id="shipping-cost-display">0.00€</span>
+                    </li>
+
                     <li class="list-group-item d-flex justify-content-between bg-light">
                         <span class="fw-bold text-success">TOTAL</span>
-                        <strong class="text-success">{{ "%.2f"|format(total) }}€</strong>
+                        <strong class="text-success" id="cart-total">{{ "%.2f"|format(total) }}€</strong>
                     </li>
                 </ul>
             </div>
@@ -310,6 +317,39 @@
         function updateProgress(percent) {
             document.getElementById('bank-progress').style.width = percent + '%';
         }
+    </script>
+    <script>
+        // 1. Guardamos el precio base de los productos (viene de Jinja2)
+        const baseProductTotal = {{ total }};
+
+        // 2. Referencias a los elementos del DOM
+        const shippingSelect = document.getElementById('shipping');
+        const shippingDisplay = document.getElementById('shipping-cost-display');
+        const cartTotalDisplay = document.getElementById('cart-total');
+        const btnTotalDisplay = document.getElementById('btn-total');
+
+        // 3. Función para recalcular
+        function updateTotals() {
+            // Obtenemos el valor seleccionado
+            const selectedOption = shippingSelect.value;
+            
+            // Determinamos el coste (0€ estándar, 5€ express)
+            let shippingCost = 0.00;
+            if (selectedOption === 'express') {
+                shippingCost = 5.00;
+            }
+
+            // Calculamos el nuevo total
+            const newTotal = baseProductTotal + shippingCost;
+
+            // Actualizamos los textos en pantalla con 2 decimales
+            shippingDisplay.innerText = shippingCost.toFixed(2) + "€";
+            cartTotalDisplay.innerText = newTotal.toFixed(2) + "€";
+            btnTotalDisplay.innerText = newTotal.toFixed(2) + "€";
+        }
+
+        // 4. Escuchar el evento 'change' en el select
+        shippingSelect.addEventListener('change', updateTotals);
     </script>
 
     {% include "footer.html" %}

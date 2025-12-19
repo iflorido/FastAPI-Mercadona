@@ -462,20 +462,32 @@ async def checkout_page(request: Request):
     
 @app.post("/success", response_class=HTMLResponse)
 async def success_page(request: Request):
-    cart_items, total_price = get_cart_data(request)
+    # 1. Recuperamos los datos del carrito
+    cart_items, subtotal = get_cart_data(request)
     
     if not cart_items:
          return RedirectResponse(url="/", status_code=303)
 
-    transaction_id = str(uuid.uuid4()).split('-')[0].upper()
-    request.session.pop("cart", None) # Vaciar carrito
+    # 2. Leer el formulario para ver qué envío eligió el usuario
+    form_data = await request.form()
+    shipping_method = form_data.get("shipping") # 'standard' o 'express'
     
+    # 3. Calcular el coste de envío en el servidor
+    shipping_cost = 5.00 if shipping_method == 'express' else 0.00
+    
+    # 4. Generar ID transacción
+    transaction_id = str(uuid.uuid4()).split('-')[0].upper()
+    
+    # 5. Vaciar carrito
+    request.session.pop("cart", None)
+    
+    # 6. Pasar el coste correcto a success.html
     return templates.TemplateResponse("success.html", {
         "request": request,
         "cart_items": cart_items,
-        "total": total_price,
-        "transaction_id": transaction_id,
-        "shipping": 5.99
+        "total": subtotal,    # Precio de productos
+        "shipping": shipping_cost, # Coste de envío dinámico
+        "transaction_id": transaction_id
     })
 
 # --- ENDPOINTS API JSON (Para App Móvil) ---

@@ -16,6 +16,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel
 from fastapi.responses import PlainTextResponse
 
@@ -116,6 +118,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 2. Middlewares
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"]) 
+
 app.add_middleware(SessionMiddleware, secret_key="una_clave_muy_secreta_y_aleatoria")
 
 # 3. CORS (Para permitir acceso desde tu App React Native)
@@ -573,6 +576,24 @@ Allow: /
 Sitemap: https://mercaapi.automaworks.es/sitemap.xml
 """
     return content
+@app.middleware("http")
+async def remove_www_and_force_https(request: Request, call_next):
+    # A. Redirección de WWW a NO-WWW
+    hostname = request.url.hostname
+    if hostname and hostname.startswith("www."):
+        new_host = hostname[4:]
+        url = request.url.replace(hostname=new_host)
+        return RedirectResponse(url=str(url), status_code=301)
+    
+    # B. Forzar HTTPS (Lógica manual compatible con proxies)
+    # Verificamos si la petición original NO era https
+    protocol = request.headers.get("x-forwarded-proto", "http")
+    if protocol == "http" and "localhost" not in hostname:
+        url = request.url.replace(scheme="https")
+        return RedirectResponse(url=str(url), status_code=301)
+
+    return await call_next(request) 
+
 
 @app.get("/actualizar-db")
 async def update_db_endpoint(background_tasks: BackgroundTasks):

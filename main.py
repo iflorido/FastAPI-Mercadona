@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from pydantic import BaseModel
+from fastapi.responses import PlainTextResponse
 
 # --- CONFIGURACIÓN ---
 DB_FILE = Path("mercadona.db")
@@ -129,7 +130,7 @@ app.add_middleware(
 
 # 4. Templates (Jinja2)
 templates = Jinja2Templates(directory="templates")
-
+BASE_URL_REAL = "https://mercaapi.automaworks.es"
 # --- FUNCIONES AUXILIARES ---
 
 def slugify(text: str) -> str:
@@ -563,6 +564,15 @@ async def sitemap(request: Request):
     xml_content += '</urlset>'
 
     return Response(content=xml_content, media_type="application/xml")
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+async def robots_txt():
+    """Indica a Google que puede indexar todo y dónde está el mapa del sitio."""
+    content = """User-agent: *
+Allow: /
+Sitemap: https://mercaapi.automaworks.es/sitemap.xml
+"""
+    return content
 
 @app.get("/actualizar-db")
 async def update_db_endpoint(background_tasks: BackgroundTasks):

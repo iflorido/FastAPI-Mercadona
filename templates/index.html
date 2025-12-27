@@ -5,24 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
     <title>Mercadona API | Desarrollo FastAPI & Python por Ignacio Florido</title>
-    <meta name="description" content="Proyecto de demostración técnica desarrollado por Ignacio Florido. Tienda online y Backend generados con Python y FastAPI consumiendo la API de Mercadona. Soporte para web y aplicación móvil.">
+    <meta name="description" content="Explora el catálogo de productos de Mercadona mediante esta API desarrollada por Ignacio Florido con Python y FastAPI. Proyecto técnico con cache en SQLite.">
     <meta name="keywords" content="Ignacio Florido, Python, FastAPI, Mercadona API, Backend Developer, Portfolio, SQLite, React Native Backend, Desarrollo Web">
     <meta name="author" content="Ignacio Florido">
     <meta name="robots" content="index, follow">
     
-    <link rel="canonical" href="{{ request.url }}"> <meta property="og:type" content="website">
+    <link rel="canonical" href="https://mercaapi.automaworks.es/"> 
+
+    <meta property="og:type" content="website">
     <meta property="og:title" content="Mercadona API Explorer - Portfolio Ignacio Florido">
-    <meta property="og:description" content="Descubre cómo crear una tienda online eficiente usando Python, FastAPI y SQLite. Proyecto Fullstack desarrollado por Ignacio Florido.">
+    <meta property="og:description" content="Descubre cómo crear una tienda online eficiente usando Python, FastAPI y SQLite.">
     <meta property="og:url" content="https://mercaapi.automaworks.es/">
-    <meta property="og:site_name" content="Mercadona API | Desarrollo FastAPI & Python por Ignacio Florido">
+    <meta property="og:site_name" content="Mercadona API | Ignacio Florido">
     <meta property="og:image" content="{{ url_for('static', path='og-image.jpg') }}">
+
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "WebApplication",
       "name": "FastAPI Mercadona Explorer",
       "url": "https://mercaapi.automaworks.es",
-      "description": "Aplicación web y API Backend desarrollada en Python con FastAPI que simula una tienda online obteniendo datos de Mercadona en tiempo real y cacheando en SQLite.",
+      "description": "Aplicación web y API Backend desarrollada en Python con FastAPI que simula una tienda online obteniendo datos de Mercadona en tiempo real.",
       "applicationCategory": "EducationalApplication",
       "operatingSystem": "All",
       "author": {
@@ -42,95 +45,34 @@
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Oxygen:wght@300;400;700&display=swap" rel="stylesheet">
     
     <style>
-        body { 
-            background-color: #f8f9fa;
-            font-family: 'Oxygen', sans-serif;
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-        }
-
-        .hero-section {
-            background-color: #005432; 
-            color: white;
-            padding: 3rem 0;
-            margin-bottom: 2rem;
-            border-radius: 0 0 15px 15px;
-            box-shadow: 0 4px 15px rgba(0,84,50,0.3);
-        }
-        
-        .category-card {
-            transition: transform 0.2s, box-shadow 0.2s;
-            height: 100%;
-            border: none;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        }
-        
-        .category-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-        }
-        
-        .subcat-link {
-            text-decoration: none;
-            color: #555;
-            display: block;
-            padding: 6px 0;
-            transition: all 0.2s;
-        }
-        
-        .subcat-link:hover {
-            color: #005432;
-            padding-left: 8px;
-            font-weight: 700;
-        }
-        
-        .card-header-custom {
-            background-color: white;
-            border-bottom: 3px solid #9dcfbc;
-            color: #005432;
-            font-weight: 700;
-            padding: 1rem;
-        }
-
-        .footer {
-            margin-top: auto;
-            background-color: #212529;
-            color: #adb5bd;
-            padding: 2rem 0;
-            font-size: 0.9rem;
-        }
-        .footer a {
-            color: #fff;
-            text-decoration: none;
-            transition: color 0.3s;
-        }
-        .footer a:hover {
-            color: #198754;
-        }
+        body { background-color: #f8f9fa; font-family: 'Oxygen', sans-serif; display: flex; flex-direction: column; min-height: 100vh; }
+        .hero-section { background-color: #005432; color: white; padding: 3.5rem 0; margin-bottom: 2rem; border-radius: 0 0 25px 25px; box-shadow: 0 4px 15px rgba(0,84,50,0.3); }
+        .category-card { transition: transform 0.2s, box-shadow 0.2s; height: 100%; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-radius: 12px; }
+        .category-card:hover { transform: translateY(-5px); box-shadow: 0 12px 24px rgba(0,0,0,0.1); }
+        .subcat-link { text-decoration: none; color: #444; display: block; padding: 7px 0; transition: all 0.2s; border-bottom: 1px solid #eee; }
+        .subcat-link:last-child { border-bottom: none; }
+        .subcat-link:hover { color: #005432; padding-left: 10px; font-weight: 600; background-color: #f0fdf4; }
+        .card-header-custom { background-color: #fff; border-bottom: 3px solid #005432; color: #005432; font-weight: 700; padding: 1.2rem; border-radius: 12px 12px 0 0 !important; }
+        .footer { margin-top: auto; background-color: #212529; color: #adb5bd; padding: 3rem 0; }
+        .tech-badge { background-color: #e9ecef; color: #005432; font-weight: 600; padding: 5px 12px; border-radius: 20px; font-size: 0.85rem; margin-right: 5px; }
     </style>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-    </script>
-     {% include "tag.html" %}
+    {% include "tag.html" %}
 </head>
 
 <body>
 
     <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
         <div class="container">
-            <a class="navbar-brand fw-bold text-success" href="/">
-                <i class="bi bi-shop"></i> Mercadona API - <small>FastAPI Explorer</small>
+            <a class="navbar-brand fw-bold text-success" href="/" title="Ir al inicio">
+                <i class="bi bi-shop"></i> Mercadona API <span class="d-none d-sm-inline">- FastAPI Explorer</span>
             </a>
-            
             <div class="d-flex align-items-center">
-                <a href="/carrito" class="btn btn-outline-success position-relative me-2">
+                <a href="/carrito" class="btn btn-outline-success position-relative me-2" title="Ver mi carrito">
                     <i class="bi bi-cart3 fs-5"></i>
                     {% if cart_count > 0 %}
                     <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
@@ -142,49 +84,81 @@
         </div>
     </nav>
 
-    <div class="hero-section text-center">
+    <header class="hero-section text-center">
         <div class="container">
-            <h1 class="display-5 fw-bold mb-3">🛒 FastAPI Mercadona Explorer</h1>
-            <p class="lead mb-4">
-                Proyecto tecnológico desarrollado en <strong>Python</strong> para consumo de API en tiempo real.<br>
-                Backend optimizado para Web y App Móvil.
+            <h1 class="display-5 fw-bold mb-3">🛒 Explorador de API de Mercadona</h1>
+            <p class="lead mb-4 mx-auto" style="max-width: 800px;">
+                Proyecto de demostración técnica desarrollado por <strong>Ignacio Florido</strong>. 
+                Utiliza <strong>Python 3.10+</strong>, <strong>FastAPI</strong> y <strong>SQLite</strong> para el procesamiento de datos y cache dinámico.
             </p>
             
             <div class="d-flex justify-content-center">
-                <div class="col-md-8 bg-white p-3 rounded text-dark shadow-sm">
+                <div class="col-md-8 bg-white p-3 rounded-pill text-dark shadow-sm">
                     {% include 'buscar.html' %}
                 </div>
             </div>
         </div>
-    </div>
+    </header>
 
-    <div class="container mb-5">
+    <main class="container mb-5">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h2 class="h4 fw-bold text-dark border-start border-4 border-success ps-3">Catálogo de Productos Disponibles</h2>
+                <p class="text-muted">Navega por las categorías obtenidas en tiempo real para explorar productos, precios y detalles técnicos.</p>
+            </div>
+        </div>
+
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-            
             {% for main_cat in main_categories %}
             <div class="col">
-                <div class="card category-card">
+                <section class="card category-card">
                     <div class="card-header card-header-custom">
-                        {{ main_cat.name }}
+                        <i class="bi bi-tag-fill me-2"></i> {{ main_cat.name }}
                     </div>
                     <div class="card-body">
                         <ul class="list-unstyled mb-0">
                             {% for subcategory in main_cat.categories %}
                             <li>
-                                <a href="/categories/{{ subcategory.id }}-{{ subcategory.name | slugify }}" class="subcat-link">
-                                    <i class="bi bi-chevron-right small text-success"></i> 
+                                <a href="/categories/{{ subcategory.id }}-{{ subcategory.name | slugify }}" 
+                                   class="subcat-link" 
+                                   title="Explorar productos de {{ subcategory.name }}">
+                                    <i class="bi bi-chevron-right small text-success me-1"></i> 
                                     {{ subcategory.name }}
                                 </a>
                             </li>
                             {% endfor %}
                         </ul>
                     </div>
-                </div>
+                </section>
             </div>
             {% endfor %}
-            
         </div>
-    </div>
+
+        <hr class="my-5">
+        
+        <section class="row py-4 bg-white rounded shadow-sm m-0">
+            <div class="col-lg-7 p-4">
+                <h2 class="h3 fw-bold mb-3">Sobre este Proyecto Backend</h2>
+                <p>Esta aplicación es una <strong>implementación Full-Stack</strong> diseñada para demostrar la eficiencia de los frameworks modernos de Python. El sistema realiza llamadas asíncronas a los servicios de datos, formatea la información y la sirve mediante una interfaz optimizada.</p>
+                <div class="mt-3">
+                    <span class="tech-badge">FastAPI</span>
+                    <span class="tech-badge">Python</span>
+                    <span class="tech-badge">Jinja2</span>
+                    <span class="tech-badge">SQLite</span>
+                    <span class="tech-badge">Bootstrap 5</span>
+                </div>
+            </div>
+            <div class="col-lg-5 p-4 bg-light border-start">
+                <h3 class="h5 fw-bold">Características Técnicas</h3>
+                <ul class="small text-muted">
+                    <li>Rutas optimizadas para SEO mediante <strong>slugs legibles</strong>.</li>
+                    <li>Consumo dinámico de API externa con manejo de errores.</li>
+                    <li>Arquitectura modular preparada para escalabilidad en la nube.</li>
+                    <li>Frontend 100% responsivo y adaptado a móviles.</li>
+                </ul>
+            </div>
+        </section>
+    </main>
 
     {% include "footer.html" %}
 

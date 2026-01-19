@@ -8,7 +8,7 @@ import unicodedata
 import re
 import uuid  # Importado una sola vez arriba
 from typing import List, Optional
-
+import os
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks, Form, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -22,7 +22,10 @@ from pydantic import BaseModel
 from fastapi.responses import PlainTextResponse
 
 # --- CONFIGURACIÓN ---
-DB_FILE = Path("mercadona.db")
+
+DATA_DIR = Path("data")
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_FILE = DATA_DIR / "mercadona.db"
 MERCADONA_API_URL = "https://tienda.mercadona.es/api/categories/"
 
 # --- MODELOS PYDANTIC (Esquemas de datos) ---

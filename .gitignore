@@ -3,3 +3,6 @@
 *.DS_Store
 */.DS_Store
 static/.DS_Store
+mercadona.db
+data/
+__pycache__/

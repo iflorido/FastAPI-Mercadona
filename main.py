@@ -218,7 +218,8 @@ def create_database_and_table():
         display_name TEXT,
         thumbnail TEXT,
         unit_price TEXT,
-        share_url TEXT
+        share_url TEXT,
+        brand TEXT
     )
     """)
     conn.commit()
@@ -306,8 +307,8 @@ async def sync_database():
                 for p in valid_products
             ]
             cursor.executemany("""
-            INSERT OR REPLACE INTO products (id, ean, display_name, thumbnail, unit_price, share_url)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO products (id, ean, display_name, thumbnail, unit_price, share_url, p.brand)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """, data_tuples)
             conn.commit()
             conn.close()
@@ -526,7 +527,26 @@ async def get_product_details_json(product_id: str):
 async def get_category_products_json(category_id: int):
     async with httpx.AsyncClient() as client:
         response = await client.get(f"https://tienda.mercadona.es/api/categories/{category_id}")
-        return response.json()
+    
+    data = response.json()
+    # Aqui vamos a enriquecer Productos con la marca que muestra la BD
+    # Enriquecer productos con brand de nuestra DB
+    conn = sqlite3.connect(DB_FILE, timeout=10)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    for sub_cat in data.get("categories", []):
+        for product in sub_cat.get("products", []):
+            pid = str(product.get("id", ""))
+            cursor.execute("SELECT brand FROM products WHERE id = ?", (pid,))
+            row = cursor.fetchone()
+            if row and row["brand"]:
+                product["brand"] = row["brand"]
+    
+    conn.close()
+    return data
+    
+    
 
 @app.get("/api/v1/buscar")
 async def search_products_api(query: str):

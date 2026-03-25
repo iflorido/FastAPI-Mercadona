@@ -290,6 +290,13 @@ async def sync_database():
             print(f"Fase 3: Guardando en SQL...", flush=True)
             conn = sqlite3.connect(DB_FILE, timeout=60)
             cursor = conn.cursor()
+            # Borrar productos que ya no existen en la API
+            current_ids = [p.id for p in valid_products]
+            if current_ids:
+                placeholders = ','.join('?' * len(current_ids))
+                cursor.execute(f"DELETE FROM products WHERE id NOT IN ({placeholders})", current_ids)
+                print(f"🗑 Eliminados {cursor.rowcount} productos obsoletos.", flush=True)
+            
             data_tuples = [
                 (p.id, p.ean, p.display_name, p.thumbnail, p.price_instructions.unit_price, p.share_url)
                 for p in valid_products

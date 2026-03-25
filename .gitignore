@@ -5,4 +5,5 @@
 static/.DS_Store
 mercadona.db
 data/
+*.db
 __pycache__/

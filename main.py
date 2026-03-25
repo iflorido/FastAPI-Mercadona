@@ -222,6 +222,10 @@ def create_database_and_table():
         brand TEXT
     )
     """)
+    try:
+        cursor.execute("ALTER TABLE products ADD COLUMN brand TEXT")
+    except:
+        pass  # Ya existe la columna    
     conn.commit()
     conn.close()
 
@@ -303,11 +307,11 @@ async def sync_database():
                 print(f"🗑 Eliminados {cursor.rowcount} productos obsoletos.", flush=True)
             
             data_tuples = [
-                (p.id, p.ean, p.display_name, p.thumbnail, p.price_instructions.unit_price, p.share_url)
+                (p.id, p.ean, p.display_name, p.thumbnail, p.price_instructions.unit_price, p.share_url, p.brand)
                 for p in valid_products
             ]
             cursor.executemany("""
-            INSERT OR REPLACE INTO products (id, ean, display_name, thumbnail, unit_price, share_url, p.brand)
+            INSERT OR REPLACE INTO products (id, ean, display_name, thumbnail, unit_price, share_url, brand)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """, data_tuples)
             conn.commit()

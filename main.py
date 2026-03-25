@@ -605,6 +605,11 @@ async def api_checkout(request: Request, shipping: str = Body("standard")):
         "shipping": shipping_cost,
         "total": round(subtotal + shipping_cost, 2)
     }
+    
+@app.post("/api/v1/cart/clear")
+async def api_clear_cart(request: Request):
+    request.session.pop("cart", None)
+    return {"message": "Carrito vaciado"}
 
 # --- SITEMAP & TOOLS ---
 

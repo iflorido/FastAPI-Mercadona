@@ -6,6 +6,7 @@ import traceback
 import httpx
 import unicodedata
 import re
+from fastapi import Body
 import uuid  # Importado una sola vez arriba
 from typing import List, Optional
 import os
@@ -125,7 +126,10 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 app.add_middleware(SessionMiddleware, secret_key="una_clave_muy_secreta_y_aleatoria")
 
 # 3. CORS (Para permitir acceso desde tu App React Native)
-origins = ["*"] 
+origins = ["*",
+    "http://localhost:5173",   # Vite dev server
+    "http://localhost:3000",   # Por si usas otro puerto
+    "https://mercaapi.automaworks.es",] 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -542,6 +546,65 @@ async def search_products_api(query: str):
     
     conn.close()
     return results
+
+@app.post("/api/v1/cart/add")
+async def api_add_to_cart(request: Request, product_id: str = Body(...), quantity: int = Body(1)):
+    cart = request.session.get("cart", {})
+    if product_id in cart:
+        cart[product_id] += quantity
+    else:
+        cart[product_id] = quantity
+    request.session["cart"] = cart
+    # Devolvemos el carrito actualizado, NO una redirección
+    return {"message": "Producto añadido", "cart": cart}
+
+@app.get("/api/v1/cart")
+async def api_get_cart(request: Request):
+    cart_items, total_price = get_cart_data(request)
+    return {
+        "items": cart_items,
+        "total": round(total_price, 2),
+        "count": sum(item["quantity"] for item in cart_items)
+    }
+
+@app.post("/api/v1/cart/update")
+async def api_update_cart(request: Request, product_id: str = Body(...), quantity: int = Body(...)):
+    cart = request.session.get("cart", {})
+    if quantity <= 0:
+        cart.pop(product_id, None)
+    else:
+        cart[product_id] = quantity
+    request.session["cart"] = cart
+    cart_items, total_price = get_cart_data(request)
+    return {"items": cart_items, "total": round(total_price, 2)}
+
+@app.delete("/api/v1/cart/{product_id}")
+async def api_remove_from_cart(request: Request, product_id: str):
+    cart = request.session.get("cart", {})
+    cart.pop(product_id, None)
+    request.session["cart"] = cart
+    cart_items, total_price = get_cart_data(request)
+    return {"items": cart_items, "total": round(total_price, 2)}
+
+@app.post("/api/v1/checkout")
+async def api_checkout(request: Request, shipping: str = Body("standard")):
+    cart_items, subtotal = get_cart_data(request)
+    if not cart_items:
+        raise HTTPException(status_code=400, detail="Carrito vacío")
+
+    shipping_cost = 5.00 if shipping == "express" else 0.00
+    transaction_id = str(uuid.uuid4()).split('-')[0].upper()
+
+    # Vaciar carrito
+    request.session.pop("cart", None)
+
+    return {
+        "transaction_id": transaction_id,
+        "items": cart_items,
+        "subtotal": round(subtotal, 2),
+        "shipping": shipping_cost,
+        "total": round(subtotal + shipping_cost, 2)
+    }
 
 # --- SITEMAP & TOOLS ---
 

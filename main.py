@@ -130,7 +130,7 @@ origins = ["*",
     "http://localhost:5173",   # Vite dev server
     "http://localhost:3000",   # Por si usas otro puerto
     "https://mercaapi.automaworks.es",
-     "https://mercareact.automaworks.es",] 
+    "https://mercareact.automaworks.es",] 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
